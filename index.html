@@ -36,7 +36,7 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <div id="toast" role="status" aria-live="polite"></div>
 <div class="players" id="players"></div>
 <div class="ctrls">
-<button class="btn main" id="bSubmit"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="lbl">احتساب</span></button>
+<button class="btn main" id="bSubmit" aria-label="احتساب"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="lbl">احتساب</span></button>
 <button class="btn" id="bCancel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9l6 6M15 9l-6 6"/></svg><span class="lbl">إلغاء الحركة</span></button>
 <button class="btn" id="bSwap"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"/></svg><span class="lbl">تبديل القطع</span></button>
 <button class="btn" id="bPass"><svg class="ic flip" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l9 7-9 7zM18 5v14"/></svg><span class="lbl">تمرير الدور</span></button>
@@ -60,9 +60,6 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <div class="thGrid" id="thB" role="group" aria-label="المظهر"></div>
 <h3 class="setH">التخطيط</h3>
 <div class="dimList" id="lyB"></div>
-<h3 class="setH">الأبعاد</h3>
-<div class="dimList" id="dmB"></div>
-<button class="btn" id="dmReset" type="button">إعادة ضبط الأبعاد</button>
 <button class="btn" id="flReset" type="button">إعادة ضبط العناصر العائمة</button>
 <h3 class="setH">التطبيق</h3>
 <div class="pwaBox">

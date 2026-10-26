@@ -50,6 +50,7 @@ function syncTitles() {
 }
 
 export function initLayout() {
+  try { localStorage.removeItem('scrabble.dims'); } catch { /* the old Dimensions sliders are gone: a saved value must never silently resize the default layout */ }
   const ad = $('#ad');
   makeFloating(ad, 'settings', $('#aT'), el => [(innerWidth - el.offsetWidth) / 2, innerHeight - el.offsetHeight - 8]);
   makeFloating($('#hist'), 'hist', document.querySelector('#hist h2'), () => [8, 8], { def: 'hist' });

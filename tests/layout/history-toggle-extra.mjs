@@ -32,7 +32,7 @@ console.log('# persistence, invalid + unavailable storage');
   let { page, errors } = await openGame(b, VIEWPORTS['desktop 1366x768']);
   ok((await state(page)).hidden === false, 'default is visible when nothing is stored');
   await tog(page); ok(await page.evaluate(k => localStorage.getItem(k), KEY) === 'false', 'hiding stores scrabble.historyVisible=false');
-  ok(await page.evaluate(() => localStorage.getItem('scrabble.theme') === null && localStorage.getItem('scrabble.dims') === null), 'theme and dims keys untouched');
+  ok(await page.evaluate(() => localStorage.getItem('scrabble.theme') === null ), 'theme key untouched');
   await page.reload({ waitUntil: 'networkidle0' });
   ok((await state(page)).hidden === true && (await state(page)).label === 'إظهار السجل', 'reload restores hidden state (before any game starts)');
   await page.evaluate(() => { document.querySelector('#hToggle').click(); });
@@ -55,15 +55,16 @@ console.log('# persistence, invalid + unavailable storage');
     ok(r.errors.length === 0, 'no page errors without storage: ' + r.errors.join(';')); await closeGame(r.page); }
 }
 
-console.log('# extreme dimension settings (hist scale, board scale, button scale) x 4 viewports');
-for (const dims of [{ historyScale: 1.6, historyHeightScale: 1.6, historyWidthScale: 1.6, buttonScale: 1.6, boardScale: 1.5, rackScale: 0.5 }, { historyScale: 0.6, historyHeightScale: 0.4, historyWidthScale: 0.6, buttonScale: 0.6, boardScale: 0.5 }]) {
-  for (const name of ['portrait-phone 390x844', 'landscape-phone 844x390', 'landscape-tablet 1024x768', 'desktop 1366x768']) {
-    const { page } = await openGame(b, VIEWPORTS[name], { storage: { 'scrabble.dims': JSON.stringify(dims) } }); await seedHistory(page); await settle(page);
-    const V0 = await geometry(page); await tog(page); await settle(page); const H = await geometry(page); await tog(page); await settle(page); const V1 = await geometry(page);
-    const d1 = diffGeometry(V0, H), d2 = diffGeometry(V0, V1);
-    ok(d1.length === 0 && d2.length === 0, `${name} dims h=${dims.historyScale}/b=${dims.boardScale}: boxes unchanged on hide+show ${d1.concat(d2).slice(0, 3).join('; ')}`);
-    await closeGame(page);
-  }
+console.log('# obsolete scrabble.dims is discarded: it can no longer resize the default layout');
+for (const name of ['portrait-phone 390x844', 'landscape-phone 844x390', 'landscape-tablet 1024x768', 'desktop 1366x768']) {
+  const clean = await openGame(b, VIEWPORTS[name]); await seedHistory(clean.page); await settle(clean.page);
+  const G0 = await geometry(clean.page); await closeGame(clean.page);
+  const old = JSON.stringify({ historyScale: 1.6, historyHeightScale: 1.6, historyWidthScale: 1.6, buttonScale: 1.6, boardScale: 0.5, rackScale: 0.5 });
+  const { page } = await openGame(b, VIEWPORTS[name], { storage: { 'scrabble.dims': old } }); await seedHistory(page); await settle(page);
+  const d = diffGeometry(G0, await geometry(page));
+  ok(d.length === 0, `${name}: stale dims value changes nothing ${d.slice(0, 3).join('; ')}`);
+  ok(await page.evaluate(() => localStorage.getItem('scrabble.dims') === null), `${name}: obsolete key removed`);
+  await closeGame(page);
 }
 
 }

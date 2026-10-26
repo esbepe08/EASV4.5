@@ -2,7 +2,6 @@ import { boot, choose, ROOT } from './harness.mjs';
 const w = boot();
 const imp = f => import(`${ROOT}/js/${f}`);
 const { initThemes, loadTheme, setTheme, THEMES } = await imp('themes.js');
-const { initDims } = await imp('dims.js');
 const { buildDom, chooseMode } = await imp('ui.js');
 const { initInput } = await imp('input.js');
 const G = await imp('game.js');
@@ -16,7 +15,7 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  FAIL:', m); } };
 const group = n => console.log('\n# ' + n);
 
-initThemes(); initDims(); buildDom(); initInput(); G.newGame(); S.paused = true;
+initThemes(); buildDom(); initInput(); G.newGame(); S.paused = true;
 
 const EXT = [...'أإآءؤئةى'];
 const allTiles = () => Object.values(BY);
@@ -235,27 +234,6 @@ for (const [label, store, expect] of [['saved dark', { 'scrabble.theme': 'dark' 
 }
 boot({}); Object.defineProperty(globalThis, 'localStorage', { get() { throw new Error('denied'); }, configurable: true });
 { const m = await import(`${ROOT}/js/themes.js?nostorage`); ok(m.loadTheme() === 'classic', 'unavailable storage -> classic'); m.applyTheme('emerald'); ok(document.documentElement.dataset.theme === 'emerald', 'applyTheme works without storage'); }
-
-group('dimensions');
-boot({});
-const D = await import(`${ROOT}/js/dims.js?x`);
-const U = await import(`${ROOT}/js/ui.js?x`).catch(() => null);
-D.initDims(); D.syncDimRows();
-for (const [k, [lo, hi, st]] of Object.entries(C.DIM_LIMITS)) {
-  const el = document.querySelector(`#dm_${k}`); if (!el) continue;
-  ok(+el.min === lo && +el.max === hi && +el.step === st, `${k} slider ${el.min}-${el.max}/${el.step} == clamp ${lo}-${hi}/${st}`);
-  el.value = String(hi * 5); el.dispatchEvent(new w.Event('input', { bubbles: true }));
-  const cssName = { boardScale: '--board-scale', rackScale: '--rack-scale', buttonScale: '--btn-scale', historyScale: '--hist-scale', historyHeightScale: '--hist-hs', historyWidthScale: '--hist-w' }[k];
-  ok(+document.documentElement.style.getPropertyValue(cssName) === hi, `${k} clamps at max ${hi}`);
-}
-ok(C.DIM_LIMITS.rackScale[1] === 1, 'rackScale max is 1 in both UI and clamp');
-document.documentElement.dataset.theme = 'dark';
-document.querySelector('#dmReset').click();
-ok(document.documentElement.dataset.theme === 'dark', 'dimension reset leaves theme alone');
-ok(+document.documentElement.style.getPropertyValue('--rack-scale') === 1 && localStorage.getItem('scrabble.dims') === null, 'reset restores defaults');
-localStorage.setItem('scrabble.dims', '{"boardScale":"abc","rackScale":99}'); D.initDims();
-ok(+document.documentElement.style.getPropertyValue('--board-scale') === 1 && +document.documentElement.style.getPropertyValue('--rack-scale') === 1, 'corrupted dims fall back / clamp');
-ok(localStorage.getItem('scrabble.theme') === null && localStorage.getItem('scrabble.dims') !== null, 'theme and dims use separate keys');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

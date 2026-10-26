@@ -13,7 +13,7 @@
  src:url('../assets/fonts/Tinos-Bold.woff2') format('woff2');
  unicode-range:U+0000-05FF,U+2000-206F,U+20A0-20CF}
 :root{--font:'ScrabbleMix',serif;
-/* Layout dimensions (set from DIM_LIMITS in js/config.js by js/dims.js) */
+/* Fixed layout constants of the default responsive layout (no longer user-adjustable; direct manipulation lives in Floating Workspace) */
 --board-scale:1;--rack-scale:1;--btn-scale:1;--btn-gap:6px;--ctrl-cols:3;--hist-scale:1;--hist-hs:1;--hist-w:1}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
@@ -203,10 +203,7 @@ grid-template-areas:"side board head" "side board hist"}
 .setPanel{display:grid;gap:12px}
 .setH{margin:4px 0 0;font-size:1.05rem;color:var(--accent-text)}
 .dimList{display:grid;gap:8px}
-.setRow{display:grid;gap:6px;padding:10px 12px;border-radius:10px;background:var(--surface-inset);border:1px solid var(--panel-line)}
 .setRowHead{display:flex;align-items:center;gap:8px;font-weight:700}
-.setRowHead output{margin-inline-start:auto;color:var(--accent-text);font-variant-numeric:tabular-nums;direction:ltr}
-.setRange{width:100%;accent-color:var(--accent);direction:ltr;cursor:pointer}
 /* Theme selector: each option carries its own data-theme, so these variables resolve to THAT theme and the button previews it. */
 .thGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .thOpt{position:relative;display:grid;gap:8px;padding:10px;border-radius:10px;text-align:start;cursor:pointer;font-weight:700;font-size:1rem;
