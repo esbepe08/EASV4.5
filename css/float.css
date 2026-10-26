@@ -47,6 +47,21 @@ html[data-floating="true"] body .ctrls{padding:24px 8px 16px;grid-template-colum
 html[data-floating="true"][data-bstyle="icon"] body .ctrls{grid-template-columns:repeat(auto-fit,minmax(calc(40px*var(--btn-scale)),1fr))}
 html[data-floating="true"][data-bstyle="iconlabel"] body .ctrls{grid-template-columns:repeat(auto-fit,minmax(calc(64px*var(--btn-scale)),1fr))}
 
+/* ---- fluid content: every module answers to its OWN width (container queries), not to the screen ----
+   Below each threshold the stable base sizes of style.css apply untouched; above it type, gaps and button height grow with the module, with a ceiling.
+   The rack already derives tile, glyph and score size from its own width (cqw), so a wider panel means bigger tiles; the panel's resize ceiling (js/float.js) bounds them. */
+html[data-floating="true"] body .ctrls{container-type:inline-size}
+@container (min-width:300px){
+  html[data-floating="true"] body .pname{font-size:clamp(1.1rem,4.4cqw,1.9rem)}
+  html[data-floating="true"] body .pscore{font-size:clamp(1.3rem,5.2cqw,2.2rem)}
+  html[data-floating="true"] body .ptime{font-size:clamp(1.15rem,4.6cqw,1.9rem)}
+  html[data-floating="true"] body .phead{gap:0 clamp(10px,2.6cqw,20px);margin-bottom:clamp(6px,1.8cqw,14px)}
+  html[data-floating="true"] body .rack{gap:clamp(5.28px,1.2cqw,12px);padding:clamp(7.92px,1.8cqw,18px)}
+}
+@container (min-width:420px){
+  html[data-floating="true"] body .ctrls .btn{min-height:clamp(calc(46px*var(--btn-scale)),5.2cqw,calc(76px*var(--btn-scale)));font-size:clamp(calc(1rem*var(--btn-scale)),2.5cqw,calc(1.5rem*var(--btn-scale)));border-radius:clamp(8px,1.6cqw,14px)}
+}
+
 /* word log (drawer: visibility/transform rules in style.css still decide when it is shown; docked: always a module) */
 html[data-floating="true"] body .hist{padding-bottom:22px;box-shadow:0 8px 24px #0008}
 html[data-floating="true"] .hist .floatHandle{position:relative;cursor:grab;touch-action:none;padding-inline-start:1.4em;border-radius:6px}
