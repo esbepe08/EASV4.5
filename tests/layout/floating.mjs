@@ -12,6 +12,7 @@ const toggle = async (p, on) => { await p.evaluate(() => document.querySelector(
 const drag = async (p, from, dx, dy) => { const r = await rect(p, from); const x = r.x + r.w / 2, y = r.y + r.h / 2; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx / 2, y + dy / 2, { steps: 4 }); await p.mouse.move(x + dx, y + dy, { steps: 4 }); await p.mouse.up(); await settle(p); };
 const ls = (p, k) => p.evaluate(k => JSON.parse(localStorage.getItem(k)), k);
 const WSKEY = 'scrabble.floatWorkspace.v2';
+const innerW = 0;   // replaced per page below
 
 for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-phone 844x390']) {
   console.log('\n# ' + name);
@@ -19,17 +20,54 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   const { page: p, errors } = await openGame(b, vp, { storage: NORMAL });
   await settle(p);
   // 1-2 default OFF: nothing floating, no handles, layout is the normal one
-  ok(await p.evaluate(() => !document.documentElement.dataset.floating && !document.querySelector('.flMove,.flGrip')), 'OFF by default: no attribute, no handles');
+  ok(await p.evaluate(() => !document.documentElement.dataset.floating && !document.querySelector('.flMove') && [...document.querySelectorAll('.flGrip')].every(g => g.closest('#dlg'))), 'OFF by default: no attribute, no module handles (only the dialogue grip)');
+  // messages float with the workspace OFF: a toast appearing never moves anything
+  { const before = await geometry(p);
+    await p.evaluate(async () => { const { toast, fail } = await import('/js/ui.js'); toast('رسالة اختبار طويلة قليلًا لقياس التأثير في التخطيط', false); });
+    await settle(p);
+    ok(await p.evaluate(() => { const t = document.querySelector('#toast'); const c = getComputedStyle(t); return c.position === 'fixed' && t.getBoundingClientRect().width > 0; }), 'toast is a fixed overlay with the workspace OFF');
+    const during = await geometry(p), d = diffGeometry(before, during, 0.5, ['#toast']);
+    ok(d.length === 0, 'toast appearing moves nothing (board, panels, racks, controls, history): ' + d.slice(0, 3).join('; '));
+    ok(await p.evaluate(() => { const r = document.querySelector('#toast').getBoundingClientRect(); return r.top >= 0 && r.left >= 0 && r.right <= innerWidth; }), 'toast inside the viewport');
+    await p.evaluate(() => { const t = document.querySelector('#toast'); t.textContent = ''; t.className = ''; });
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('#toast')).display === 'none'), 'empty toast consumes no space');
+    await p.evaluate(async () => { const { fail } = await import('/js/ui.js'); fail('اختر قطعة من رفّك.'); }); await settle(p);
+    const d2 = diffGeometry(before, await geometry(p), 0.5, ['#toast']); ok(d2.length === 0, 'invalid-action feedback moves nothing: ' + d2.slice(0, 3).join('; '));
+    await p.evaluate(() => { const t = document.querySelector('#toast'); t.textContent = ''; t.className = ''; }); }
+  // checkmark-only submit button in every button style, accessible name kept, state logic intact
+  for (const st of ['icon', 'iconlabel', 'text']) {
+    await p.evaluate(s => { document.documentElement.dataset.bstyle = s; }, st); await settle(p);
+    ok(await p.evaluate(() => { const b = document.querySelector('#bSubmit'), l = b.querySelector('.lbl').getBoundingClientRect(), i = b.querySelector('.ic').getBoundingClientRect(); return l.width <= 1 && l.height <= 1 && i.width > 10 && b.getAttribute('aria-label') === 'احتساب' && b.title === 'احتساب'; }), `bstyle=${st}: #bSubmit shows only the checkmark and keeps its accessible name`);
+  }
+  await p.evaluate(() => { document.documentElement.dataset.bstyle = 'icon'; });
+  ok(await p.$eval('#bSubmit', e => e.disabled), 'submit disabled with no tile placed');
+  await p.evaluate(async () => { const { S } = await import('/js/state.js'); const G = await import('/js/game.js'); const { render } = await import('/js/ui.js'); G.startSwap(); render(); });
+  ok(await p.$eval('#bSubmit', e => e.disabled && e.getAttribute('aria-label') === 'تأكيد التبديل (0)'), 'swap mode: disabled with 0 selected, label says confirm swap');
+  await p.evaluate(() => document.querySelector('.panel.on .slot .tile').click()); await settle(p);
+  ok(await p.$eval('#bSubmit', e => !e.disabled && e.getAttribute('aria-label') === 'تأكيد التبديل (1)' && e.title === 'تأكيد التبديل (1)'), 'swap mode: enabled with a selection, count in the accessible name');
+  await p.evaluate(async () => { const G = await import('/js/game.js'); G.cancelSwapOrMove(); });
+  // dialogue is movable and resizable with the workspace OFF
+  await p.evaluate(() => document.querySelector('#bNew').click()); await settle(p);
+  ok(await p.evaluate(() => document.documentElement.dataset.floating === undefined && !!document.querySelector('#dlg .flGrip') && getComputedStyle(document.querySelector('#dlg .flGrip')).display !== 'none'), 'dialogue has a resize grip with the workspace OFF');
+  { const r0 = await rect(p, '#dlg'); const narrow = r0.w > (await p.evaluate(() => innerWidth)) - 40; await drag(p, '#dlg .flGrip', narrow ? -80 : 60, 0); const r1 = await rect(p, '#dlg');
+    ok(narrow ? r1.w < r0.w - 20 : r1.w > r0.w + 20 && r1.w <= 560.5, `dialogue resizes within limits with the workspace OFF (${r0.w} -> ${r1.w})`);
+    await drag(p, '#dlg .flGrip', -2000, 0); ok((await rect(p, '#dlg')).w >= 259, 'dialogue never narrower than its minimum');
+    await drag(p, '#dlg .flGrip', 2000, 0); ok(await inView(p, ['#dlg']) === '', 'dialogue stays inside the viewport at maximum width');
+    await drag(p, '#dT', -30, 25); let r2 = await rect(p, '#dlg'); if (Math.abs(r2.y - r1.y) + Math.abs(r2.x - r1.x) < 3) { await drag(p, '#dT', 30, -25); r2 = await rect(p, '#dlg'); } ok(Math.abs(r2.y - r1.y) + Math.abs(r2.x - r1.x) > 3, 'dialogue movable with the workspace OFF');
+    const sv = await ls(p, 'scrabble.float'); ok(sv.dlg && sv.dlg.length === 3 && sv.dlg[2] >= 260, 'dialogue geometry [x, y, w] persisted in scrabble.float');
+    ok(await p.evaluate(() => [...document.querySelectorAll('#dF .btn')].every(b => { const r = b.getBoundingClientRect(), d = document.querySelector('#dlg').getBoundingClientRect(); return r.right <= d.right + 1 && r.left >= d.left - 1 && r.width > 40; })), 'dialogue buttons stay reachable');
+    await p.keyboard.press('Escape'); await settle(p); }
+  ok(await p.evaluate(() => !document.querySelector('.flMove')), 'no move handles with the workspace OFF');
   const G0 = await geometry(p); const S0 = await state(p);
   const dock0 = await p.evaluate(() => document.documentElement.dataset.layout || 'classic');
   // 3-6 enable / disable without reload; prefs untouched
   await p.evaluate(() => document.querySelector('#bSettings').click());
   await p.click('#lyB button[data-k="layout"][data-v="duel"]'); await p.evaluate(() => document.querySelector('#ad').close()); await settle(p);
-  const dimsBefore = await p.evaluate(() => localStorage.getItem('scrabble.dims'));
   await p.evaluate(() => { const t = document.querySelector('#toast'); t.textContent = ''; t.className = ''; });   // the message bar's text is time-dependent
   const G1 = await geometry(p);
   await toggle(p, true);
   ok(await p.evaluate(() => document.documentElement.dataset.floating === 'true' && document.querySelectorAll('.flMove').length === 4 && document.querySelectorAll('.flGrip').length >= 4), 'ON: attribute, 4 move strips, grips');
+  ok(await p.evaluate(() => [...document.querySelectorAll('.flMove')].every(m => getComputedStyle(m, '::before').content === 'none' && getComputedStyle(m).backgroundImage === 'none' && getComputedStyle(m).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(m).borderTopWidth === '0px')), 'move strips draw nothing at rest (no lines, no icon)');
   ok(await p.evaluate(() => document.querySelectorAll('.ctrls .btn .flMove,.ctrls .btn .flGrip').length === 0), 'individual control buttons are not floating windows');
   ok(await p.evaluate(() => [...document.querySelectorAll('.flMove,.flGrip')].every(n => n.getAttribute('aria-label'))), 'handles carry aria-labels');
   ok(await state(p) === S0, 'state unchanged by enabling');
@@ -110,6 +148,7 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   ok(await inView(p, ['#hist']) === '', 'word log inside viewport');
   await p.evaluate(() => document.querySelector('#hToggle').click());
   // 18 dialogue: floating, game locked behind it, callbacks intact
+  ok(await p.evaluate(() => !!document.querySelector('#dlg .flGrip')), 'dialogue grip present with the workspace ON');
   const sBefore = await state(p);
   await p.evaluate(() => document.querySelector('#bNew').click()); await settle(p);
   ok(await p.evaluate(() => { const d = document.querySelector('#dlg'); return d.open && !d.classList.contains('dlgModal') && getComputedStyle(d).position === 'fixed' && !d.matches(':modal'); }), 'confirmation is a non-modal floating panel');
@@ -133,12 +172,12 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   await p.evaluate(() => document.querySelector('#ad').close());
   // 26 disabling restores the normal layout
   await toggle(p, false);
-  ok(await p.evaluate(() => !document.documentElement.dataset.floating && !document.querySelector('.flMove,.flGrip,.flActive')), 'OFF: attribute and handles gone');
+  ok(await p.evaluate(() => !document.documentElement.dataset.floating && !document.querySelector('.flMove,.flActive') && [...document.querySelectorAll('.flGrip')].every(g => g.closest('#dlg'))), 'OFF: attribute and module handles gone');
   ok(await p.evaluate(() => ['.boardWrap', '#pn0', '#pn1', '.ctrls', '#hist'].every(s => { const st = document.querySelector(s).style; return !st.left && !st.top && !st.width && !st.zIndex && !st.getPropertyValue('--float-board-size'); })), 'no inline floating geometry left');
   await p.evaluate(() => { const t = document.querySelector('#toast'); t.textContent = ''; t.className = ''; });
   const G2 = await geometry(p), d2 = diffGeometry(G1, G2);
   ok(d2.length === 0, 'layout identical to before enabling: ' + d2.slice(0, 4).join('; '));
-  ok(await p.evaluate(() => document.documentElement.dataset.layout === 'duel') && await p.evaluate(v => localStorage.getItem('scrabble.dims') === v, dimsBefore), 'Classic/Duel choice and dimensions survive');
+  ok(await p.evaluate(() => document.documentElement.dataset.layout === 'duel'), 'Classic/Duel choice survives');
   ok(await p.evaluate(() => document.querySelector('#bLog') && document.querySelector('#hist').getAttribute('aria-label')), 'history markup intact');
   ok((await state(p)) === sBefore || true, 'state check');
   ok(errors.length === 0, 'no page errors: ' + errors.slice(0, 2));
@@ -154,6 +193,16 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   const q = await openGame(b, VIEWPORTS['desktop 1366x768'], { throwingStorage: true });
   ok(await q.page.evaluate(() => !document.documentElement.dataset.floating), 'storage unavailable => OFF, game runs');
   await closeGame(q.page);
+}
+// obsolete dims are discarded; valid saved workspace geometry is kept
+{
+  const g = JSON.stringify({ v: 2, enabled: true, portrait: {}, landscape: { board: { x: 300, y: 20, s: 500 } } });
+  const { page: p } = await openGame(b, VIEWPORTS['desktop 1366x768'], { storage: { ...NORMAL, 'scrabble.dims': '{"boardScale":0.5}', [WSKEY]: g } });
+  await settle(p);
+  const r = await rect(p, '.boardWrap'); ok(Math.abs(r.w - 500) < 2 && Math.abs(r.x - 300) < 2, 'saved workspace geometry still honoured: ' + JSON.stringify(r));
+  ok(await p.evaluate(() => localStorage.getItem('scrabble.dims') === null), 'stale dims removed');
+  ok(await p.evaluate(() => !document.querySelector('#dmB,#dmReset') && ![...document.querySelectorAll('#ad .setH')].some(h => h.textContent === 'الأبعاد') && !document.querySelector('#ad input[type=range]')), 'no Dimensions section or sliders in Settings');
+  await closeGame(p);
 }
 // legacy popup positions (scrabble.float) still honoured; settings window draggable
 {

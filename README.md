@@ -19,7 +19,7 @@ This project evolved from the original repository, [DAXEI08/update-version](http
 - Move history with words, scores, bingos, passes, swaps and tahkim verdicts, with a show/hide toggle (إخفاء السجل / إظهار السجل) that never moves the racks, buttons or board
 - Blank tiles (always worth 0)
 - Responsive layout for desktop, tablet and mobile, portrait and landscape
-- Adjustable interface dimensions (board, racks, buttons, history)
+- Optional **Floating Workspace**: move and resize the board, player panels, controls and word log directly (no size sliders in Settings)
 - **Installable, offline-capable PWA** (Android, iPhone/iPad, desktop) and **automatic match recovery** after a refresh, close or suspension (see "PWA" below)
 
 There is no automatic dictionary: word validity is decided only by the players through tahkim.
@@ -39,7 +39,7 @@ Both modes use the same engine, gameplay, board, scoring, timer, tahkim, UI, and
 
 ## Themes
 
-Themes only change presentation. They never affect the mode, tile distribution, scoring, timer, tahkim, board coordinates, placement, game state, history or dimensions. Choose one in **الإعدادات → المظهر**; it applies immediately without reloading and never resets the game.
+Themes only change presentation. They never affect the mode, tile distribution, scoring, timer, tahkim, board coordinates, placement, game state, history or layout. Choose one in **الإعدادات → المظهر**; it applies immediately without reloading and never resets the game.
 
 | Theme | Arabic | Character |
 |---|---|---|
@@ -71,18 +71,21 @@ The history panel has a small button in its corner: **إخفاء السجل** (h
 - The choice is a device preference stored in `localStorage` under `scrabble.historyVisible` (default: visible; a missing, invalid or unreadable value means visible). It is separate from `scrabble.theme` and `scrabble.dims`.
 - Known limit: with the history text set to its maximum (160%) in a very narrow history column in tight landscape layouts, the title can wrap under the button.
 
-## Floating dialogue and Floating Workspace (الإعدادات → التخطيط → الوضع العائم)
+## Messages, dialogue and Floating Workspace
 
-**In-game confirmations** (new game, undo, resume prompt after the match has started) are now a light floating panel instead of a blocking centred modal: ~92 % opaque theme surface, restrained blur, kept inside the safe area, placed on the free corner/edge that hides the least of the board, the racks and the controls, draggable by its title (double-click = automatic spot), Esc closes it. The game behind it stays frozen (`lockGame('dlg')` makes the whole `.app` inert and the clock is paused), so the look and the input lock are separate. The end-of-game result and every setup dialog (cover, mode, duration, blank letter, install help, judge) stay conventional modals.
+Architecture in one line each: the **default layout** is stable, responsive CSS (nothing in Settings resizes it); **messages** always float; the **gameplay dialogue** is always floating and adjustable; **Floating Workspace** (الوضع العائم) is the only place where users move and resize the major modules, by direct manipulation. Settings only choose behaviour and presentation (theme, layout, button style, history mode, the workspace on/off switch); the old الأبعاد sliders are gone and a stale `scrabble.dims` value is deleted at start-up so it can never shrink the default board.
 
-**Floating Workspace** is an optional presentation layer, **OFF by default**. While OFF nothing changes: the Classic/Duel layouts, `dims.js`, history drawer/docked modes and every media query are authoritative and no handle exists. Turning it ON sets `<html data-floating="true">` (rules live only in `css/float.css`, all scoped to that attribute) and lets you move/resize four modules: **board** (`.boardWrap`, always 1:1, real width via `--float-board-size`, never `transform: scale`), **each player panel** (name, clock, score and rack stay together; width is the free dimension so tiles stay square), **controls** (one palette; buttons reflow, never individually floating) and the **word log**. The dialogue's width can also be changed.
+**Always on, with the workspace OFF or ON** (`css/float.css`, parts 1a/1b)
+- `#toast` is a fixed top-centre overlay (safe-area aware, wraps, theme colours, no pointer events). It owns no layout row and takes no space while empty, so a message can never push the board, panels, controls or history.
+- In-game confirmations (new game, undo, resume prompt after the match has started) use `#dlg` as a light floating panel (~92 % opaque, restrained blur) placed on the free corner/edge that hides the least of the board, racks and controls. It is draggable by its title, **width-resizable** with its corner grip (260 px to 560 px or the viewport, height follows the content), kept inside the viewport, Esc closes it, double-click on the title resets it. Its geometry `[x, y, w]` lives in `scrabble.float`; width is stored only once the user has chosen one. The game behind stays frozen (`lockGame('dlg')` makes `.app` inert and the clock is paused). The end-of-game result and every setup dialog (cover, mode, duration, blank letter, install help, judge) remain conventional modals.
+- Layers: workspace modules 10-19 < settings / open word log 30+ < toast 45 < dialogue 50 < native modals (top layer) < PWA notices.
 
-- **Move** with the slim strip at the top of a module (word log / dialogue: their title). **Resize** with the corner grip. Dragging tiles, pressing buttons or scrolling the log never moves a module. Keyboard: Arrow keys on a strip move (Shift = bigger steps), `+` / `-` resize, arrow keys on a focused grip resize, double-click resets that one module.
-- **Geometry** is saved per orientation (portrait / landscape) in `scrabble.floatWorkspace.v2` (`{v:2, enabled, portrait:{…}, landscape:{…}}`); popup positions keep the old `scrabble.float` format. Only user overrides are stored; everything else is recomputed from the live viewport, so rotation and window resizing re-clamp (safe-area aware) without erasing the arrangement. Nothing is written during a drag, only on release.
-- **Precedence**: saved override > default derived from the current layout (player 1 left/right, panel height) and the Dimensions sliders (board scale shrinks the default board, rack scale narrows panels, history scales size the log). **إعادة ضبط العناصر العائمة** deletes the overrides (and popup positions) and returns to those defaults; theme, scores, clocks, history, layout and dimensions are untouched. Turning the mode OFF removes the attribute, handles and all inline geometry at once: no reload, no restart.
-- **Stacking**: workspace modules 10–19, word log drawer / settings 30+, toast 45, dialogue 50, native modals above; z-order is ranked inside each band, never an ever-growing counter.
-- Code: `js/float.js` (one engine for popups and modules), `js/layout.js` (the setting), `js/ui.js` (`ask()` and input lock), `css/float.css`. Game rules, scoring, clocks and board input code are untouched; the board still maps pointer targets through DOM elements, so moving or resizing it cannot desynchronise cells.
-- Tests: `tests/layout/floating.mjs` (default OFF, enable/disable, exact return to the normal layout, move/resize, square board, tile placement after move/resize, persistence, rotation, clamping, keyboard, reset, dialogue lock).
+**Floating Workspace**, OFF by default. While OFF nothing is floating: no handles, no inline geometry, the Classic/Duel layouts and history drawer/docked modes are authoritative. Turning it ON sets `<html data-floating="true">` (all its rules are scoped to that attribute) and lets you move and resize **the board** (always 1:1, real width through `--float-board-size`, never `transform: scale`), **each player panel**, **the controls** (one palette, buttons reflow) and **the word log**.
+- **Move** by dragging the top edge of a module; the strip is invisible (no lines, no icon), it only shows a move cursor and a focus ring. **Resize** with the small corner grip. Dragging tiles, pressing buttons or scrolling the log never moves a module. Keyboard: arrow keys on a focused strip move (Shift = bigger), `+` / `-` resize, arrow keys on a focused grip resize, double-click resets one module.
+- **Geometry** is saved per orientation in `scrabble.floatWorkspace.v2` (`{v:2, enabled, portrait:{…}, landscape:{…}}`). Only user overrides are stored; the rest is computed from the viewport, the Classic/Duel/swap/panel-height preferences and the rendered modules, so rotation and window resizing re-clamp (safe-area aware) without erasing the arrangement. Nothing is written during a drag. **إعادة ضبط العناصر العائمة** deletes the overrides and the popup positions; theme, scores, clocks, history and layout are untouched. Turning the mode OFF removes the attribute, handles and inline geometry at once: no reload, no restart.
+- **Primary action**: `#bSubmit` is a checkmark only in every button style (the words احتساب / تأكيد التبديل (n) remain in its `aria-label` and tooltip).
+- Code: `js/float.js` (one engine for popups and modules), `js/layout.js`, `js/ui.js` (`ask()`, input lock), `css/float.css`. Game rules, scoring, clocks and board input are untouched.
+- Tests: `tests/layout/floating.mjs`.
 
 ## Layout (الإعدادات → التخطيط)
 
@@ -194,7 +197,7 @@ css/
   themes.css      theme palettes (CSS custom properties)
 
 js/
-  config.js       global constants: board size, durations, premium layout, glyph/label maps, dimension limits
+  config.js       global constants: board size, durations, premium layout, glyph/label maps
   modes.js        Expanded and Basic tile data, blank alphabets, mode metadata
   themes.js       theme metadata, load/save/apply, theme selector
   histview.js     history show/hide toggle and its saved preference
@@ -204,7 +207,6 @@ js/
   judge.js        tahkim
   ui.js           rendering and dialogs (including mode and duration selection, blank picker)
   input.js        click/tap, keyboard, drag and drop, buttons, dialog flow
-  dims.js         interface dimension settings
   cover.js        cover screen (title in game tiles)
   main.js         start-up
   persist.js      match save / restore / resume prompt, pause-while-hidden
@@ -216,7 +218,7 @@ tests/            dev-only tests (not needed to play; see "Tests")
   contrast.py     WCAG contrast and distinctness audit of css/themes.css
   logic/
     harness.mjs   loads the real modules in jsdom
-    engine.mjs    modes, scoring, blanks, undo, tahkim, pass, themes, dimensions
+    engine.mjs    modes, scoring, blanks, undo, tahkim, pass, themes
     startup.mjs   real main.js start-up, cover, setup flow, Settings
   layout/
     lib.mjs       real-browser helpers (viewports, geometry, pixel checks)
@@ -224,7 +226,7 @@ tests/            dev-only tests (not needed to play; see "Tests")
     baseline.mjs  regenerates baseline.json
     baseline.json reference layout of the docked history panel (see "Tests")
     history-toggle.mjs        bounding boxes before/after hide and show in 8 viewports
-    history-toggle-extra.mjs  keyboard, persistence, extreme dimensions, all themes
+    history-toggle-extra.mjs  keyboard, persistence, obsolete scrabble.dims discarded, all themes
     log-icon.mjs              default drawer: the word-log icon's size, corner, no overlap, open/close (2 layouts x 8 viewports)
 
 manifest.webmanifest  PWA manifest

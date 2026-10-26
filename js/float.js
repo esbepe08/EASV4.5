@@ -1,9 +1,11 @@
 // Floating engine. One implementation of move / resize / clamp / raise / persist, used by two kinds of thing:
-//   popups   Settings (#ad), the gameplay dialogue (#dlg) and the word-log drawer (#hist): always movable, remembered per device.
+//   popups   Settings (#ad), the word-log drawer (#hist) and the gameplay dialogue (#dlg). Always movable and remembered per device.
+//            The dialogue is also always resizable (width only), with or without Floating Workspace.
 //   modules  Board, player panels, controls and word log: movable AND resizable, but only while "Floating Workspace" is ON.
-// Floating Workspace is a presentation layer: it sets <html data-floating="true"> plus inline left/top/size on the modules.
-// Turning it off removes all of that (attribute, handles, inline geometry), so the normal CSS layout and dims.js are back at once.
-// Precedence while ON:  saved override for this orientation  >  default derived from the current layout + Dimensions sliders.
+// Architecture: the default layout is stable CSS (not adjustable from Settings); Floating Workspace is the optional direct-manipulation
+// layer (it sets <html data-floating="true"> plus inline left/top/size); messages (toast, dialogue) float in every mode, independent of it.
+// Turning the workspace off removes the attribute, handles and inline geometry, so the normal CSS layout is back at once.
+// Precedence while ON:  saved override for this orientation  >  default derived from the viewport, the layout preference and the rendered modules.
 // Storage: scrabble.float (popup positions, unchanged format) and scrabble.floatWorkspace.v2 (on/off + per-orientation geometry).
 // Pure UI: no game state is read or written here.
 import { NAMES } from './config.js';
@@ -16,7 +18,7 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
 // ---------- persisted state ----------
-let saved = read(LEGACY) || {};                                  // popups: { id: [x, y] }
+let saved = read(LEGACY) || {};                                  // popups: { id: [x, y] } (the dialogue adds a third value: its chosen width)
 const ws = { enabled: false, portrait: {}, landscape: {} };      // workspace: per orientation { id: {x, y, s | w, h?} }
 {
   const s = read(WSKEY);
@@ -53,32 +55,42 @@ const DEFS = {
   p1: { sel: '#pn1', axes: 'x', label: NAMES[1] },
   ctrls: { sel: '.ctrls', axes: 'x', label: 'أزرار التحكم' },
   hist: { axes: 'xy', label: 'سجل الكلمات' },
-  dlg: { axes: 'x', label: 'النافذة', popupPos: true }   // the dialogue keeps its position with the popups; only its width is a workspace value
+  dlg: { axes: 'x', label: 'النافذة', popup: true }   // popup geometry [x, y, w] in scrabble.float; resizable in every mode
 };
 const things = {};   // id -> { id, el, def, isPopup, canMove(), canResize(), place() }
-// z-index bands: workspace modules < popups (settings, open word log) < gameplay dialogue < native modal dialogs (top layer) < PWA notices
-const BASE = { mod: 10, pop: 30, dlg: 50 }, order = { mod: [], pop: [], dlg: [] };
-const inWs = t => ws.enabled && !!t.def && !t.def.popupPos;
-const bandOf = t => t.id === 'dlg' ? 'dlg' : inWs(t) ? 'mod' : 'pop';
+// z-index bands (bounded and deterministic, never an ever-growing counter):
+//   board 10  <  foreground modules 20-2x (player panels, controls, docked word log)  <  popups 30+ (settings, open word-log drawer)  <  dialogue 50
+//   <  native modal dialogs (top layer)  <  PWA notices.
+// THE BOARD IS THE BASE LAYER OF THE FLOATING WORKSPACE: it keeps its own band and a fixed rank, so interacting with it (click, tile
+// placement, drag, resize) can never lift it over a rack or the controls. It stays movable and resizable; only its stacking is locked.
+const BASE = { board: 10, mod: 20, pop: 30, dlg: 50 }, order = { mod: [], pop: [], dlg: [] };
+const inWs = t => ws.enabled && !!t.def && !t.def.popup;
+// The word log is a foreground module while docked, but an on-demand overlay in drawer mode: then it belongs with the popups.
+const bandOf = t => t.id === 'dlg' ? 'dlg' : t.id === 'hist' && html().dataset.hist === 'drawer' ? 'pop' : inWs(t) ? 'mod' : 'pop';
 export function raise(t) {
   if (typeof t === 'string') t = things[t];
   if (!t) return;
+  if (t.id === 'board') { if (inWs(t)) t.el.style.zIndex = BASE.board; return; }   // never promoted: see above
   for (const b of Object.values(order)) { const i = b.indexOf(t); if (i >= 0) b.splice(i, 1); }
   const k = bandOf(t); order[k].push(t);
   order[k].forEach((x, i) => { x.el.style.zIndex = BASE[k] + i; });   // ranks inside a band: bounded, never an ever-growing counter
 }
 
+// Resize ranges come from the live CSS viewport (never from a device list): a usability floor that keeps small screens exactly as they were, a share of the
+// available width that lets large and ultrawide screens grow, and a generous ceiling so nothing becomes absurd. devicePixelRatio plays no part.
+const FLUID = { player: { floor: 520, frac: .36, ceil: 900 }, ctrls: { floor: 640, frac: .4, ceil: 1000 }, hist: { floor: 560, frac: .3, ceil: 900 }, board: { ceil: 1600 } };
+const fluidMax = (a, k) => Math.min(a.w, k.ceil, Math.max(k.floor, k.frac * a.w));
 function limits(t) {
   const a = area(), id = t.id;
   if (id === 'board') {
     const b = t.el.querySelector('.board'), extra = Math.max(0, t.el.offsetHeight - (b ? b.offsetHeight : 0));
-    const maxW = Math.max(120, Math.min(a.w, a.h - extra));   // on a tiny window the board may drop below its usual minimum rather than leave the screen
+    const maxW = Math.max(120, Math.min(a.w, a.h - extra, FLUID.board.ceil));   // on a tiny window the board may drop below its usual minimum rather than leave the screen
     return { minW: Math.min(240, maxW), maxW, extra };
   }
-  if (id === 'hist') return { minW: 200, maxW: Math.min(a.w, 560), minH: 160, maxH: a.h };
-  if (id === 'ctrls') return { minW: 144, maxW: Math.min(a.w, 640) };
+  if (id === 'hist') return { minW: 200, maxW: fluidMax(a, FLUID.hist), minH: 160, maxH: a.h };
+  if (id === 'ctrls') return { minW: 144, maxW: fluidMax(a, FLUID.ctrls) };
   if (id === 'dlg') return { minW: 260, maxW: Math.min(a.w, 560) };
-  return { minW: 160, maxW: Math.min(a.w, 520) };   // player panels
+  return { minW: 160, maxW: fluidMax(a, FLUID.player) };   // player panels
 }
 
 // ---------- applying geometry ----------
@@ -103,21 +115,35 @@ function applyGeom(t, g) {
   setPos(t, g.x, g.y);
 }
 
-// ---------- default geometry: from the live viewport, the Classic/Duel preferences and the Dimensions sliders ----------
-const cssNum = n => parseFloat(getComputedStyle(html()).getPropertyValue(n)) || 1;
+// ---------- default geometry: from the live viewport, the Classic/Duel preferences and the rendered modules ----------
 function defaults(o) {
   const a = area(), d = html().dataset, T = things, g = {};
-  const bs = Math.min(1, cssNum('--board-scale')), rs = cssNum('--rack-scale'), hw = cssNum('--hist-w'), hh = cssNum('--hist-hs');
   const left = d.swap === 'true' ? 'p1' : 'p0', right = left === 'p0' ? 'p1' : 'p0';
   const histOn = d.hist === 'docked' && !T.hist.el.classList.contains('history-hidden');
   const dock = d.pdock || 'bottom';
   const anchor = (h, top, bot) => dock === 'top' ? top : dock === 'middle' ? top + (bot - top - h) / 2 : bot - h;
   const measure = (t, w) => { t.el.style.width = w + 'px'; return t.el.offsetHeight; };
+  setSize(T.board, Math.min(a.w, a.h) - 80);   // measure the board's chrome (padding + bag) near its final size, not at the CSS default width
   const bl = limits(T.board), extra = bl.extra;
   if (o === 'landscape') {
     // board centred and as tall as the screen allows; player panels hug it on both sides; controls under the right panel
-    const s = clamp(Math.min(a.h - extra, a.w - 2 * 176 - 2 * M) * bs, bl.minW, bl.maxW);
-    const colW = clamp((a.w - s) / 2 - M, 168, 300), pw = clamp(colW * (0.5 + 0.5 * rs), 160, 300);
+    const s = clamp(Math.min(a.h - extra, a.w - 2 * 176 - 2 * M), bl.minW, bl.maxW);
+    // A panel is sized from the board: seven rack tiles about one board cell wide (+ padding). Small boards keep the 300px floor of the original layout.
+    const pMax = limits(T.p0).maxW, pCap = Math.min(pMax, Math.max(300, Math.round(0.58 * s + 24)));
+    const colW = clamp((a.w - s) / 2 - M, 168, pCap), pw = clamp(colW, 160, pCap);
+    if ((a.w - s) / 2 - M > pCap + 2 * M + 80) {
+      // Wide profile (shape decides, not a resolution): free space beside the board exceeds what two panels need, so the row becomes Board | Controls | Players
+      const cw = clamp(Math.round(0.32 * s), 168, Math.min(limits(T.ctrls).maxW, 360)), hp = measure(T[left], pw), hq = measure(T[right], pw), hc = measure(T.ctrls, cw);
+      const total = s + M + cw + M + pw, x0 = Math.max(a.x0, a.x0 + (a.w - total) / 2), bh = s + extra, stackH = hp + M + hq;
+      const yP = clamp(a.y0 + (bh - stackH) / 2, a.y0, Math.max(a.y0, a.y1 - stackH));
+      g.board = { x: x0, y: a.y0, s };
+      g.ctrls = { x: x0 + s + M, y: clamp(a.y0 + (bh - hc) / 2, a.y0, Math.max(a.y0, a.y1 - hc)), w: cw };
+      g[left] = { x: x0 + s + M + cw + M, y: yP, w: pw }; g[right] = { x: x0 + s + M + cw + M, y: yP + hp + M, w: pw };
+      const below = yP + stackH + M, room = a.y1 - below, wid = clamp(pw, 200, Math.min(limits(T.hist).maxW, a.w));
+      g.hist = room >= 160 ? { x: g[left].x, y: below, w: wid, h: clamp(Math.min(room, 560), 160, a.h) }
+        : { x: Math.max(a.x0, g[left].x), y: a.y0, w: wid, h: clamp(Math.min(a.h, 560), 160, a.h) };
+      return g;
+    }
     const bx = a.x0 + (a.w - s) / 2, lx = Math.max(a.x0, bx - M - pw), rx = Math.min(a.x1 - pw, bx + s + M);
     const hp = measure(T[left], pw); measure(T[right], pw); const hc = measure(T.ctrls, pw);
     const stack = hp + M + hc, ctrlsRight = stack <= a.h;   // a very short screen moves the controls under the other panel
@@ -125,31 +151,32 @@ function defaults(o) {
     g.board = { x: bx, y: a.y0, s };
     g[right] = { x: rx, y: yR, w: pw }; g[left] = { x: lx, y: yL, w: pw };
     g.ctrls = ctrlsRight ? { x: rx, y: yR + hp + M, w: pw } : { x: lx, y: yL + hp + M, w: pw };
-    const wid = clamp(colW * hw, 200, Math.min(560, a.w)), below = (ctrlsRight ? yL + hp : yL + stack) + M, room = a.y1 - below;
-    g.hist = room >= 160 ? { x: Math.max(a.x0, lx + pw - wid), y: below, w: wid, h: clamp(Math.min(room, 560 * hh), 160, a.h) }
-      : { x: Math.max(a.x0, lx), y: a.y0, w: wid, h: clamp(Math.min(a.h, 560 * hh), 160, a.h) };
+    const wid = clamp(colW, 200, Math.min(560, a.w)), below = (ctrlsRight ? yL + hp : yL + stack) + M, room = a.y1 - below;
+    g.hist = room >= 160 ? { x: Math.max(a.x0, lx + pw - wid), y: below, w: wid, h: clamp(Math.min(room, 560), 160, a.h) }
+      : { x: Math.max(a.x0, lx), y: a.y0, w: wid, h: clamp(Math.min(a.h, 560), 160, a.h) };
   } else {
     // board on top at full width, the two panels side by side under it, controls under them
     const pw = Math.floor((a.w - M) / 2);
     const hp = measure(T[left], pw); measure(T[right], pw); const hc = measure(T.ctrls, a.w);
-    const s = clamp(Math.min(a.w, a.h - extra - M - hp - M - hc - (histOn ? 150 + M : 0)) * bs, bl.minW, bl.maxW);
+    const s = clamp(Math.min(a.w, a.h - extra - M - hp - M - hc - (histOn ? 150 + M : 0)), bl.minW, bl.maxW);
     const yP = a.y0 + s + extra + M, below = yP + hp + M + hc + M;
     g.board = { x: a.x0 + (a.w - s) / 2, y: a.y0, s };
     g[left] = { x: a.x0, y: yP, w: pw }; g[right] = { x: a.x1 - pw, y: yP, w: pw };
     g.ctrls = { x: a.x0, y: yP + hp + M, w: a.w };
-    const wid = clamp(Math.min(a.w, 380) * hw, 200, a.w);
-    g.hist = histOn && a.y1 - below >= 150 ? { x: a.x0, y: below, w: a.w, h: Math.min(a.y1 - below, 560 * hh) }
-      : { x: a.x0 + (a.w - wid) / 2, y: a.y0, w: wid, h: clamp(Math.min(a.h, 560 * hh, 0.7 * innerHeight), 160, a.h) };
+    const wid = clamp(Math.min(a.w, 380), 200, a.w);
+    g.hist = histOn && a.y1 - below >= 150 ? { x: a.x0, y: below, w: a.w, h: Math.min(a.y1 - below, 560) }
+      : { x: a.x0 + (a.w - wid) / 2, y: a.y0, w: wid, h: clamp(Math.min(a.h, 560, 0.7 * innerHeight), 160, a.h) };
   }
   return g;
 }
 
 export function refreshWorkspace() {
   if (!ws.enabled || !things.board) return;
-  const o = orient(), mods = Object.values(things).filter(t => t.def && !t.def.popupPos);
+  const o = orient(), mods = Object.values(things).filter(t => t.def && !t.def.popup);
   const D = mods.some(t => !ws[o][t.id]) ? defaults(o) : null;   // overrides are only clamped for display, never rewritten
   for (const t of mods) applyGeom(t, ws[o][t.id] || D[t.id]);
-  const dlg = things.dlg; if (dlg) dlg.el.style.width = ws[o].dlg ? clamp(ws[o].dlg.w, 260, Math.min(area().w, 560)) + 'px' : '';
+  const bt = things.board, a = area(), over = bt.el.getBoundingClientRect().bottom - a.y1;   // display-only guard: wrapper chrome can differ by a few px from the estimate
+  if (over > 0.5) { const w = bt.el.getBoundingClientRect().width, g = ws[o].board || D.board; setSize(bt, w - over); setPos(bt, g.x, g.y); }
 }
 function reflowPopups() {
   for (const t of Object.values(things)) if (t.isPopup && !inWs(t) && t.canMove() && t.el.matches('[open],.open')) { const r = t.el.getBoundingClientRect(); setPos(t, r.left, r.top); }
@@ -159,13 +186,14 @@ const schedule = (() => { let f = 0; return () => { if (f) return; f = requestAn
 // ---------- commit (only on pointerup / keyboard step, never while moving) ----------
 function commit(t, resized) {
   const r = t.el.getBoundingClientRect(), o = orient();
-  if (ws.enabled && t.def && !t.def.popupPos) { ws[o][t.id] = geomOf(t); saveWS(); return; }
-  saved[t.id] = [r.left, r.top]; savePopups();
-  if (ws.enabled && t.def && resized) { ws[o][t.id] = { w: r.width }; saveWS(); }
+  if (ws.enabled && t.def && !t.def.popup) { ws[o][t.id] = geomOf(t); saveWS(); return; }
+  const rec = [r.left, r.top];
+  if (t.def?.popup && (resized || saved[t.id]?.[2])) rec.push(r.width);   // width is only remembered once the user has chosen one
+  saved[t.id] = rec; savePopups();
 }
 function resetOne(t) {
   const o = orient();
-  if (ws.enabled && t.def) { delete ws[o][t.id]; saveWS(); }
+  if (ws.enabled && t.def && !t.def.popup) { delete ws[o][t.id]; saveWS(); }
   if (inWs(t)) return refreshWorkspace();
   delete saved[t.id]; savePopups(); if (t.def && t.id === 'dlg') t.el.style.removeProperty('width'); t.place();
 }
@@ -203,6 +231,7 @@ function bindHandle(t, h) {
 function resizeBy(t, dw, dh) {
   const r = t.el.getBoundingClientRect(), a = area(), ax = t.def.axes;
   if (ax === 's') setSize(t, Math.min(r.width + dw, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0);
+  else if (t.def.popup) setSize(t, r.width + dw);
   else setSize(t, Math.min(r.width + dw, a.x1 - r.left), ax === 'xy' ? Math.min(r.height + dh, a.y1 - r.top) : null);
   setPos(t, r.left, r.top); commit(t, true);
 }
@@ -211,7 +240,8 @@ function bindGrip(t, g) {
   const apply = e => {
     const a = area(), r = t.el.getBoundingClientRect(), dx = e.clientX - rs.x, dy = e.clientY - rs.y, ax = t.def.axes;
     if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, Math.min(rs.w + d, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0); }
-    else setSize(t, Math.min(rs.w + dx, a.x1 - r.left), ax === 'xy' ? Math.min(rs.h + dy, a.y1 - r.top) : null);
+    else if (t.def.popup) { setSize(t, rs.w + dx); setPos(t, r.left, r.top); }   // a popup against the right edge grows by sliding left instead of refusing
+    else { setSize(t, Math.min(rs.w + dx, a.x1 - r.left), ax === 'xy' ? Math.min(rs.h + dy, a.y1 - r.top) : null); if (ax === 'x') setPos(t, r.left, r.top); }   // height follows width (racks grow): slide it back inside
   };
   g.addEventListener('pointerdown', e => {
     if (e.button || !t.canResize()) return;
@@ -248,12 +278,16 @@ const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z
 
 // ---------- popups: settings, gameplay dialogue, word-log drawer ----------
 const isFixed = t => getComputedStyle(t.el).position === 'fixed' && !t.el.classList.contains('dlgModal');
-// opts.def: name of the DEFS entry that makes this popup resizable while Floating Workspace is ON ('hist', 'dlg')
+// opts.def: DEFS entry that makes this popup resizable: 'hist' only while Floating Workspace is ON, 'dlg' always
 export function makeFloating(el, id, handle, defPos, opts = {}) {
   const t = things[id] = { id, el, handle, def: opts.def ? DEFS[opts.def] : null, isPopup: true };
   t.canMove = () => isFixed(t);
-  t.canResize = () => !!t.def && ws.enabled && isFixed(t);
-  t.place = () => { if (inWs(t)) return refreshWorkspace(); const p = saved[id] || defPos(el); setPos(t, p[0], p[1]); };
+  t.canResize = () => !!t.def && (t.def.popup || ws.enabled) && isFixed(t);   // the dialogue never needs the workspace
+  t.place = () => {
+    if (inWs(t)) return refreshWorkspace();
+    if (t.def?.popup) { const w = saved[id]?.[2]; if (w) setSize(t, w); else el.style.removeProperty('width'); }   // width first: the default spot depends on it
+    const p = saved[id] || defPos(el); setPos(t, p[0], p[1]);
+  };
   handle.classList.add('floatHandle'); handle.tabIndex = 0;
   handle.title = 'اسحب لتحريك النافذة · مزدوج النقر لإعادة الموضع';
   el.addEventListener('pointerdown', () => raise(t), true);
@@ -276,7 +310,7 @@ export function autoPos(el) {
   }
   return [best.x, best.y];
 }
-// Resets popup positions and workspace geometry only; theme, dimensions, layout, game state and history are not touched.
+// Resets popup positions and workspace geometry only; theme, layout, game state and history are not touched.
 export function resetFloats() {
   saved = {}; savePopups(); ws.portrait = {}; ws.landscape = {}; saveWS();
   if (ws.enabled) refreshWorkspace();
@@ -298,25 +332,33 @@ export function initWorkspace() {   // after buildDom(): the player panels exist
   for (const id of ['board', 'p0', 'p1', 'ctrls']) {
     const el = document.querySelector(DEFS[id].sel);
     const t = things[id] = { id, el, def: DEFS[id], isPopup: false, canMove: () => ws.enabled, canResize: () => ws.enabled };
-    el.addEventListener('pointerdown', () => raise(t), true);
+    if (id !== 'board') el.addEventListener('pointerdown', () => raise(t), true);   // board interaction never takes part in foreground ordering
   }
+  // Content can change a module's height after layout (counter row, rack, labels, fonts): re-fit then, but never while the user is dragging one.
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => { if (ws.enabled && !document.querySelector('.flActive')) schedule(); });
+    for (const id of ['board', 'p0', 'p1', 'ctrls']) ro.observe(things[id].el);
+  }
+  if (things.dlg) addChrome(things.dlg);   // the dialogue's grip is permanent; the workspace modules get theirs only while ON
   addEventListener('resize', schedule); addEventListener('orientationchange', schedule);
-  document.addEventListener('eas:dims', schedule);
   document.fonts?.ready.then(schedule);
   if (ws.enabled) enter();
 }
 function enter() {
   html().dataset.floating = 'true';
   for (const t of Object.values(things)) if (t.def) addChrome(t);
+  for (const b of Object.values(order)) b.length = 0;
+  for (const t of Object.values(things)) if (t.def && !t.def.popup) t.el.style.removeProperty('z-index');   // stale inline z-index never overrides the layering
   refreshWorkspace();
-  for (const t of Object.values(things)) if (t.def && !t.def.popupPos) raise(t);
+  for (const id of ['board', 'p0', 'p1', 'ctrls']) raise(id);
+  if (things.hist) raise('hist');
 }
 function leave() {
   delete html().dataset.floating;
   for (const t of Object.values(things)) {
     if (!t.def) continue;
-    removeChrome(t);
-    if (t.id === 'dlg') t.el.style.removeProperty('width'); else clearInline(t);
+    if (t.def.popup) continue;   // the dialogue is independent of the workspace
+    removeChrome(t); clearInline(t);
   }
   for (const b of Object.values(order)) b.length = 0;
   const h = things.hist; if (h && h.el.classList.contains('open')) showFloat('hist');   // drawer open: back to its remembered popup spot
