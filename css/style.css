@@ -13,7 +13,7 @@
  src:url('../assets/fonts/Tinos-Bold.woff2') format('woff2');
  unicode-range:U+0000-05FF,U+2000-206F,U+20A0-20CF}
 :root{--font:'ScrabbleMix',serif;
-/* Layout dimensions (set from DIM_LIMITS in js/config.js by js/dims.js) */
+/* Fixed layout constants of the default responsive layout (no longer user-adjustable; direct manipulation lives in Floating Workspace) */
 --board-scale:1;--rack-scale:1;--btn-scale:1;--btn-gap:6px;--ctrl-cols:3;--hist-scale:1;--hist-hs:1;--hist-w:1}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
@@ -21,7 +21,7 @@ body{font-family:var(--font);color:var(--text-main);min-height:100dvh;padding:ma
 background:radial-gradient(ellipse at top,var(--bg-page-1),var(--bg-page-2) 70%) fixed;font-size:18px;transition:color .2s ease}
 .app{max-width:calc(760px*max(1,var(--board-scale)));margin:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 .bag{margin-top:8px;text-align:center;font-size:1rem;min-height:1.2em}
-.boardWrap{min-width:0;position:relative;--logSz:34px}   /* relative = anchor of the word-log icon; later layout rules override it (sticky) */
+.boardWrap{min-width:0;position:relative}
 .board{container-type:inline-size;--lf:4.6cqw;--vf:1.8cqw;display:grid;grid-template:repeat(15,minmax(0,1fr))/repeat(15,minmax(0,1fr));aspect-ratio:1;width:100%;max-width:calc(720px*var(--board-scale));margin-inline:auto;
 padding:1.2%;border-radius:10px;background:linear-gradient(135deg,var(--board-1),var(--board-2));border:3px solid var(--board-line);box-shadow:0 10px 30px #000a,inset 0 0 0 2px var(--board-rim)}
 .sq{position:relative;display:grid;place-items:center;min-width:0;min-height:0;border:1px solid var(--sq-line);font-size:max(7px,2.1cqw);font-weight:700;color:var(--premium-text);line-height:1.05;
@@ -194,7 +194,7 @@ grid-template-areas:"side board head" "side board hist"}
 #toast{min-height:24px;font-size:.85rem;padding:0 8px}
 .panel{padding:5px 8px}.phead{margin-bottom:3px}
 .pname{font-size:.95rem}.ptime{font-size:1rem}.pscore{font-size:1.1rem}
-.rack{max-width:230px}.boardWrap{--logSz:28px}
+.rack{max-width:230px}
 .ctrls .btn{min-height:calc(34px*var(--btn-scale));font-size:calc(.8rem*var(--btn-scale));padding:2px 3px;border-radius:7px}
 }
 /* Settings (theme + sizes): bottom sheet so the board stays visible while adjusting */
@@ -203,10 +203,7 @@ grid-template-areas:"side board head" "side board hist"}
 .setPanel{display:grid;gap:12px}
 .setH{margin:4px 0 0;font-size:1.05rem;color:var(--accent-text)}
 .dimList{display:grid;gap:8px}
-.setRow{display:grid;gap:6px;padding:10px 12px;border-radius:10px;background:var(--surface-inset);border:1px solid var(--panel-line)}
 .setRowHead{display:flex;align-items:center;gap:8px;font-weight:700}
-.setRowHead output{margin-inline-start:auto;color:var(--accent-text);font-variant-numeric:tabular-nums;direction:ltr}
-.setRange{width:100%;accent-color:var(--accent);direction:ltr;cursor:pointer}
 /* Theme selector: each option carries its own data-theme, so these variables resolve to THAT theme and the button previews it. */
 .thGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .thOpt{position:relative;display:grid;gap:8px;padding:10px;border-radius:10px;text-align:start;cursor:pointer;font-weight:700;font-size:1rem;
@@ -219,13 +216,13 @@ background:var(--dialog-bg);color:var(--text-main);border:2px solid var(--dialog
 .thOpt[aria-pressed="true"]::after{content:"✓";position:absolute;top:6px;inset-inline-end:10px;font-size:1.1rem;line-height:1}
 .thOpt:focus-visible{outline:3px dashed #000;outline-offset:2px;box-shadow:0 0 0 7px #fff}
 /* ===== Layout preferences (js/layout.js sets data-layout / data-swap / data-hist on <html>) ===== */
-.btn.logBtn{display:none;position:absolute;inset-block-end:0;inset-inline-end:0;width:var(--logSz);height:var(--logSz);min-height:0;padding:0;border-radius:50%;align-items:center;justify-content:center}
-.logBtn .ic{width:55%;height:55%}
-.logBtn::after{content:"";position:absolute;inset:-6px}   /* touch target stays 46px while the icon stays small */
-.logBtn[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:1px}
-html[data-hist="drawer"] .btn.logBtn{display:flex}
-/* The counter row reserves the icon's height and keeps its text clear of it (symmetric padding, so the text stays centred under the board) */
-html[data-hist="drawer"] .bag{display:flex;align-items:center;justify-content:center;min-height:var(--logSz);padding-inline:calc(var(--logSz) + 4px)}
+/* Word-log button: a normal member of the control palette (.ctrls). It only toggles the drawer, so it exists only in drawer mode. */
+/* Game Tools: a separate floating module that exists only in Floating Workspace (js/float.js moves the tool buttons into it and back).
+   Fullscreen is a tool of that module, so it is not shown in the structured default layout. */
+html:not([data-floating="true"]) #tools,html:not([data-floating="true"]) #bFs{display:none}
+#bFs[hidden]{display:none!important}
+html:not([data-hist="drawer"]) .ctrls #bLog{display:none}
+.ctrls #bLog[aria-expanded="true"]{outline:2px solid var(--accent);outline-offset:1px}
 .segRow{display:grid;gap:6px;padding:10px 12px;border-radius:10px;background:var(--surface-inset);border:1px solid var(--panel-line)}
 .seg{display:flex;gap:6px}.seg .btn{flex:1;min-height:40px}
 .seg .btn[aria-pressed="true"]{background:linear-gradient(var(--btn-main-1),var(--btn-main-2));color:var(--btn-main-text);outline:2px solid var(--accent);outline-offset:1px}

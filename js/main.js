@@ -7,19 +7,19 @@ import { initInput } from './input.js';
 import { initThemes } from './themes.js';
 import { initHistoryToggle } from './histview.js';
 import { showCover } from './cover.js';
-import { initDims } from './dims.js';
 import { initLayout } from './layout.js';
 import { initWorkspace } from './float.js';
+import { initFullscreen } from './fullscreen.js';
 import { loadSaved, initPersistence, startFlow, schedule } from './persist.js';
 import { initPwa } from './pwa.js';
 
 function start() {
   const saved = loadSaved();   // an unfinished match from a previous visit, validated; read before anything can overwrite it
   initThemes();
-  initDims();
   initHistoryToggle();
   initLayout();
   buildDom();
+  initFullscreen();
   initWorkspace();   // needs the player panels that buildDom just created; a saved "Floating Workspace: ON" is restored here
   initInput();
   setInterval(tick, TICK_MS);

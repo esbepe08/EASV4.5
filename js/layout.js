@@ -50,6 +50,7 @@ function syncTitles() {
 }
 
 export function initLayout() {
+  try { localStorage.removeItem('scrabble.dims'); } catch { /* the old Dimensions sliders are gone: a saved value must never silently resize the default layout */ }
   const ad = $('#ad');
   makeFloating(ad, 'settings', $('#aT'), el => [(innerWidth - el.offsetWidth) / 2, innerHeight - el.offsetHeight - 8]);
   makeFloating($('#hist'), 'hist', document.querySelector('#hist h2'), () => [8, 8], { def: 'hist' });
@@ -59,7 +60,8 @@ export function initLayout() {
   $('#aClose').addEventListener('click', () => ad.close());
   $('#flReset').addEventListener('click', resetFloats);
   syncTitles();
-  new MutationObserver(syncTitles).observe(document.querySelector('.ctrls'), { childList: true, characterData: true, subtree: true });
+  const mo = new MutationObserver(syncTitles);   // the turn controls and (in Floating Workspace) the game tools module
+  for (const n of document.querySelectorAll('.ctrls, #tools')) mo.observe(n, { childList: true, characterData: true, subtree: true });
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
     if (s && typeof s === 'object') for (const k of Object.keys(DEF)) if (ok(k, s[k])) pref[k] = s[k];

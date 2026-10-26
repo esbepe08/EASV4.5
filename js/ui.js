@@ -3,7 +3,6 @@ import { showFloat, gameInert, lockGame } from './float.js';
 import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL, NAMES } from './config.js';
 import { TILE_MODES } from './modes.js';
 import { $, S, app, fmt, inMove, cur, profile } from './state.js';
-import { syncDimRows } from './dims.js';
 
 let cells = [], toastTimer = 0, dlgCb = null, dlgCancel = null;
 const hs = {id: -1, v: -1};   // last rendered history (game id / version)
@@ -94,7 +93,7 @@ export function chooseDuration() {
   $('#sd').returnValue = ''; $('#sd').showModal();
 }
 export function openBlankPicker() { $('#bd').returnValue = ''; $('#bd').showModal(); }
-export function openSettings() { S.paused = true; syncDimRows(); gameInert(true); $('#ad').show(); showFloat('settings'); $('#aT').focus(); }
+export function openSettings() { S.paused = true; gameInert(true); $('#ad').show(); showFloat('settings'); $('#aT').focus(); }
 
 // ---------- Rendering (DOM is only touched when a cell/rack/list actually changed) ----------
 const sqHTML = k => {
@@ -132,7 +131,8 @@ function renderPlayers() {
 }
 function renderControls() {
   const mv = S.move.length > 0, E = S.ended;
-  $('#bSubmit .lbl').textContent = S.swap ? `تأكيد التبديل (${S.sel.size})` : 'احتساب';
+  const sub = S.swap ? `تأكيد التبديل (${S.sel.size})` : 'احتساب';   // visually a checkmark only (css/float.css); the words live in the accessible name
+  $('#bSubmit .lbl').textContent = sub; $('#bSubmit').setAttribute('aria-label', sub);
   $('#bSubmit').disabled = E || (S.swap ? !S.sel.size : !mv);
   $('#bCancel .lbl').textContent = S.swap ? 'إلغاء التبديل' : 'إلغاء الحركة';
   $('#bCancel').disabled = E || (!S.swap && !mv);
