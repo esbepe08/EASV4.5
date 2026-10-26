@@ -57,7 +57,7 @@ export const MEASURE = ['.app', '.boardWrap', '#board', '#bagInfo', '.side', '#t
 export function geometry(page, viewportCoords = false) {
   return page.evaluate((sels, vc) => {
     const out = {};
-    for (const s of sels) out[s] = [...document.querySelectorAll(s)].map(e => { const r = e.getBoundingClientRect(); return [r.x + (vc ? 0 : scrollX), r.y + (vc ? 0 : scrollY), r.width, r.height].map(v => Math.round(v * 100) / 100); });
+    for (const s of sels) out[s] = [...document.querySelectorAll(s)].filter(e => e.id !== 'bLog' && e.id !== 'bFs').map(e =>   /* the word-log button is a display:none member of .ctrls while history is docked, and the fullscreen button is a Game Tools button that exists only in Floating Workspace, so neither is part of the layout baseline */ { const r = e.getBoundingClientRect(); return [r.x + (vc ? 0 : scrollX), r.y + (vc ? 0 : scrollY), r.width, r.height].map(v => Math.round(v * 100) / 100); });
     out.doc = [document.documentElement.scrollWidth, document.documentElement.scrollHeight];
     return out;
   }, MEASURE, viewportCoords);

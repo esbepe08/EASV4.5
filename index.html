@@ -30,21 +30,23 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <section class="boardWrap">
 <div id="board" class="board" role="grid" aria-label="لوح اللعب"></div>
 <div id="bagInfo" class="bag"></div>
-<button type="button" class="btn logBtn" id="bLog" aria-controls="hist" aria-expanded="false" aria-label="سجل الكلمات" title="سجل الكلمات"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 12h12M4 18h12M20 6h.01M20 12h.01M20 18h.01"/></svg></button>
 </section>
 <section class="side">
 <div id="toast" role="status" aria-live="polite"></div>
 <div class="players" id="players"></div>
 <div class="ctrls">
-<button class="btn main" id="bSubmit"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="lbl">احتساب</span></button>
+<button class="btn main" id="bSubmit" aria-label="احتساب"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="lbl">احتساب</span></button>
 <button class="btn" id="bCancel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9l6 6M15 9l-6 6"/></svg><span class="lbl">إلغاء الحركة</span></button>
 <button class="btn" id="bSwap"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"/></svg><span class="lbl">تبديل القطع</span></button>
 <button class="btn" id="bPass"><svg class="ic flip" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l9 7-9 7zM18 5v14"/></svg><span class="lbl">تمرير الدور</span></button>
 <button class="btn" id="bUndo"><svg class="ic flip" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/></svg><span class="lbl">تراجع</span></button>
 <button class="btn danger" id="bNew"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">لعبة جديدة</span></button>
 <button class="btn wide" id="bJudge"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M7 20h10M5 8h14M5 8l-3 7a3 3 0 006 0zM19 8l-3 7a3 3 0 006 0z"/></svg><span class="lbl">تحكيم</span></button>
+<button type="button" class="btn wide" id="bLog" aria-controls="hist" aria-expanded="false" aria-label="سجل الكلمات" title="سجل الكلمات"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 12h12M4 18h12M20 6h.01M20 12h.01M20 18h.01"/></svg><span class="lbl">سجل الكلمات</span></button>
+<button type="button" class="btn wide" id="bFs" aria-pressed="false" aria-label="ملء الشاشة" title="ملء الشاشة"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="lbl">ملء الشاشة</span></button>
 <button class="btn wide" id="bSettings"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span class="lbl">الإعدادات</span></button>
 </div>
+<div class="tools" id="tools" role="group" aria-label="أدوات اللعبة"></div>
 </section>
 <aside class="hist" id="hist" aria-label="سجل الكلمات"><button type="button" class="histToggle" id="hToggle" aria-controls="hList" aria-expanded="true">إخفاء السجل</button><h2>سجل الكلمات</h2><ol class="hl" id="hList"></ol><p class="hbest" id="hBest"></p></aside>
 </main>
@@ -60,9 +62,6 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <div class="thGrid" id="thB" role="group" aria-label="المظهر"></div>
 <h3 class="setH">التخطيط</h3>
 <div class="dimList" id="lyB"></div>
-<h3 class="setH">الأبعاد</h3>
-<div class="dimList" id="dmB"></div>
-<button class="btn" id="dmReset" type="button">إعادة ضبط الأبعاد</button>
 <button class="btn" id="flReset" type="button">إعادة ضبط العناصر العائمة</button>
 <h3 class="setH">التطبيق</h3>
 <div class="pwaBox">
