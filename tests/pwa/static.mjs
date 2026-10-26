@@ -73,8 +73,8 @@ ok(rm && /\.tile\.pick\{animation:blink[^}]*!important/.test(rm[0]) && /\*,\*::b
 ok(/\.sq\.has::before\{[^}]*var\(--tile-cast/.test(styleCss), 'board tiles cast their shadow from the square (.sq.has::before, themed by --tile-cast)');
 ok(/\.sq\.has\.fall::before\{animation:cast/.test(styleCss) && /@keyframes cast\{from\{transform:[^}]*opacity/.test(styleCss), 'landing shadow animates transform + opacity only');
 ok(!/@keyframes cast\{[^]*?(box-shadow|filter)/.test(styleCss.match(/@keyframes cast\{[^\n]*/)[0]), 'landing shadow keyframes do not animate box-shadow/filter (repaint-free)');
-// Word log: icon-only button that still has an accessible name
-const indexHtml = rd('index.html'), bLog = indexHtml.match(/<button[^>]*id="bLog"[^>]*>([\s\S]*?)<\/button>/);
-ok(bLog && /aria-label="[^"]+"/.test(bLog[0]) && /<svg/.test(bLog[1]) && !/>\s*[^<\s]/.test(bLog[1].replace(/<svg[\s\S]*<\/svg>/, '')), 'word-log button is icon-only (svg, no text) and has an aria-label');
+// Word log: a regular member of the control palette (.ctrls), same icon + .lbl structure as its siblings, with an accessible name
+const indexHtml = rd('index.html'), bLog = indexHtml.match(/<button[^>]*id="bLog"[^>]*>([\s\S]*?)<\/button>/), ctrlsHtml = (indexHtml.match(/<div class="ctrls">([\s\S]*?)<\/div>\s*<\/section>/) || [])[1] || '';
+ok(bLog && /aria-label="[^"]+"/.test(bLog[0]) && /<svg class="ic"/.test(bLog[1]) && /<span class="lbl">[^<]+<\/span>/.test(bLog[1]) && ctrlsHtml.includes('id="bLog"') && (indexHtml.match(/id="bLog"/g) || []).length === 1 && !/<section class="boardWrap">[\s\S]*?<\/section>/.exec(indexHtml)[0].includes('bLog'), 'word-log button lives in .ctrls (svg.ic + span.lbl, aria-label), exactly once, not in .boardWrap');
 
 console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);

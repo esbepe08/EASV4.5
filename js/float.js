@@ -58,13 +58,19 @@ const DEFS = {
   dlg: { axes: 'x', label: 'النافذة', popup: true }   // popup geometry [x, y, w] in scrabble.float; resizable in every mode
 };
 const things = {};   // id -> { id, el, def, isPopup, canMove(), canResize(), place() }
-// z-index bands: workspace modules < popups (settings, open word log) < gameplay dialogue < native modal dialogs (top layer) < PWA notices
-const BASE = { mod: 10, pop: 30, dlg: 50 }, order = { mod: [], pop: [], dlg: [] };
+// z-index bands (bounded and deterministic, never an ever-growing counter):
+//   board 10  <  foreground modules 20-2x (player panels, controls, docked word log)  <  popups 30+ (settings, open word-log drawer)  <  dialogue 50
+//   <  native modal dialogs (top layer)  <  PWA notices.
+// THE BOARD IS THE BASE LAYER OF THE FLOATING WORKSPACE: it keeps its own band and a fixed rank, so interacting with it (click, tile
+// placement, drag, resize) can never lift it over a rack or the controls. It stays movable and resizable; only its stacking is locked.
+const BASE = { board: 10, mod: 20, pop: 30, dlg: 50 }, order = { mod: [], pop: [], dlg: [] };
 const inWs = t => ws.enabled && !!t.def && !t.def.popup;
-const bandOf = t => t.id === 'dlg' ? 'dlg' : inWs(t) ? 'mod' : 'pop';
+// The word log is a foreground module while docked, but an on-demand overlay in drawer mode: then it belongs with the popups.
+const bandOf = t => t.id === 'dlg' ? 'dlg' : t.id === 'hist' && html().dataset.hist === 'drawer' ? 'pop' : inWs(t) ? 'mod' : 'pop';
 export function raise(t) {
   if (typeof t === 'string') t = things[t];
   if (!t) return;
+  if (t.id === 'board') { if (inWs(t)) t.el.style.zIndex = BASE.board; return; }   // never promoted: see above
   for (const b of Object.values(order)) { const i = b.indexOf(t); if (i >= 0) b.splice(i, 1); }
   const k = bandOf(t); order[k].push(t);
   order[k].forEach((x, i) => { x.el.style.zIndex = BASE[k] + i; });   // ranks inside a band: bounded, never an ever-growing counter
@@ -304,7 +310,7 @@ export function initWorkspace() {   // after buildDom(): the player panels exist
   for (const id of ['board', 'p0', 'p1', 'ctrls']) {
     const el = document.querySelector(DEFS[id].sel);
     const t = things[id] = { id, el, def: DEFS[id], isPopup: false, canMove: () => ws.enabled, canResize: () => ws.enabled };
-    el.addEventListener('pointerdown', () => raise(t), true);
+    if (id !== 'board') el.addEventListener('pointerdown', () => raise(t), true);   // board interaction never takes part in foreground ordering
   }
   if (things.dlg) addChrome(things.dlg);   // the dialogue's grip is permanent; the workspace modules get theirs only while ON
   addEventListener('resize', schedule); addEventListener('orientationchange', schedule);
@@ -314,8 +320,11 @@ export function initWorkspace() {   // after buildDom(): the player panels exist
 function enter() {
   html().dataset.floating = 'true';
   for (const t of Object.values(things)) if (t.def) addChrome(t);
+  for (const b of Object.values(order)) b.length = 0;
+  for (const t of Object.values(things)) if (t.def && !t.def.popup) t.el.style.removeProperty('z-index');   // stale inline z-index never overrides the layering
   refreshWorkspace();
-  for (const t of Object.values(things)) if (t.def && !t.def.popup) raise(t);
+  for (const id of ['board', 'p0', 'p1', 'ctrls']) raise(id);
+  if (things.hist) raise('hist');
 }
 function leave() {
   delete html().dataset.floating;
