@@ -21,16 +21,24 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
 // ---------- persisted state ----------
 let saved = read(LEGACY) || {};                                  // popups: { id: [x, y] } (the dialogue adds a third value: its chosen width)
-const ws = { enabled: false, portrait: {}, landscape: {} };      // workspace: per orientation { id: {x, y, s | w, h?} }
+const ws = { enabled: false, tools: 'auto', portrait: {}, landscape: {} };      // workspace: per orientation { id: {x, y, s | w, h?} }; tools: 'auto' | 'open' | 'min' (Game Tools state)
 {
   const s = read(WSKEY);
   if (s && s.v === 2) {
     ws.enabled = s.enabled === true;
+    if (s.tools === 'open' || s.tools === 'min') ws.tools = s.tools;   // only an explicit user choice is stored; 'auto' follows the screen
     for (const o of ORI) for (const [id, g] of Object.entries(s[o] || {}))
       if (g && typeof g === 'object' && Object.values(g).every(Number.isFinite)) ws[o][id] = g;
   }
 }
-const saveWS = () => write(WSKEY, { v: 2, enabled: ws.enabled, portrait: ws.portrait, landscape: ws.landscape });
+const saveWS = () => write(WSKEY, { v: 2, enabled: ws.enabled, ...(ws.tools !== 'auto' && { tools: ws.tools }), portrait: ws.portrait, landscape: ws.landscape });
+
+// Game Tools can be minimized to a single small button. Until the user chooses, the state follows the screen: compact screens (shortest side under COMPACT CSS px, so
+// phones in either orientation and small windows) start minimized; larger ones start expanded. An explicit choice is kept. Each state keeps its own saved geometry
+// ('tools' = expanded, 'toolsMin' = the button), so neither overwrites the other.
+const COMPACT = 600;
+const toolsMin = () => ws.tools === 'min' || (ws.tools !== 'open' && Math.min(innerWidth, innerHeight) < COMPACT);
+const gid = t => t.id === 'tools' && toolsMin() ? 'toolsMin' : t.id;
 const savePopups = () => write(LEGACY, saved);
 
 // ---------- viewport: safe-area aware, never relies on 100vh ----------
@@ -123,7 +131,7 @@ function geomOf(t) {   // what is on screen right now, in storable form (+ the a
 function applyGeom(t, g) {
   const a = area(), mapped = g.aw > 0 && g.ah > 0 && (Math.abs(a.w - g.aw) > 1 || Math.abs(a.h - g.ah) > 1);
   const k = mapped ? Math.min(a.w / g.aw, a.h / g.ah) : 1;
-  if (g.s != null || g.w != null) setSize(t, (g.s ?? g.w) * k, g.h != null ? g.h * k : undefined);
+  if ((g.s != null || g.w != null) && !(t.id === 'tools' && toolsMin())) setSize(t, (g.s ?? g.w) * k, g.h != null ? g.h * k : undefined);   // the minimized button has a fixed footprint
   if (!mapped) return setPos(t, g.x, g.y);
   const r = t.el.getBoundingClientRect(), w0 = g.s ?? g.w ?? r.width;
   const fx = clamp((g.x - a.x0) / Math.max(1, g.aw - w0), 0, 1), fy = clamp((g.y - a.y0) / Math.max(1, g.ah - (g.bh ?? r.height)), 0, 1);
@@ -140,6 +148,8 @@ function defaults(o) {
   const measure = (t, w) => { t.el.style.width = w + 'px'; return t.el.offsetHeight; };
   setSize(T.board, Math.min(a.w, a.h) - 80);   // measure the board's chrome (padding + bag) near its final size, not at the CSS default width
   const bl = limits(T.board), extra = bl.extra;
+  // Minimized Game Tools: same slot, but the layout is computed with the button's real footprint and filed under its own key.
+  const fin = () => { if (toolsMin() && g.tools) { g.toolsMin = { x: g.tools.x, y: g.tools.y }; delete g.tools; } return g; };
   if (o === 'landscape') {
     // board centred and as tall as the screen allows; player panels hug it on both sides; controls under the right panel
     const s = clamp(Math.min(a.h - extra, a.w - 2 * 176 - 2 * M), bl.minW, bl.maxW);
@@ -158,7 +168,7 @@ function defaults(o) {
       const below = yP + stackH + M, room = a.y1 - below, wid = clamp(pw, 200, Math.min(limits(T.hist).maxW, a.w));
       g.hist = room >= 160 ? { x: g[left].x, y: below, w: wid, h: clamp(Math.min(room, 560), 160, a.h) }
         : { x: Math.max(a.x0, g[left].x), y: a.y0, w: wid, h: clamp(Math.min(a.h, 560), 160, a.h) };
-      return g;
+      return fin();
     }
     const bx = a.x0 + (a.w - s) / 2, lx = Math.max(a.x0, bx - M - pw), rx = Math.min(a.x1 - pw, bx + s + M);
     // each side column is a player panel plus one control module: Turn Controls under the right panel, Game Tools under the left one
@@ -175,7 +185,8 @@ function defaults(o) {
     const pw = Math.floor((a.w - M) / 2);
     // controls: Turn Controls and Game Tools share one row (about 3:2) while it is wide enough, else they stack; Turn Controls start on the reading side
     const rtl = getComputedStyle(document.body).direction === 'rtl', row = a.w >= 300;
-    const tw = row ? Math.round((a.w - M) * 0.58) : a.w, uw = row ? a.w - M - tw : a.w;
+    const mw = toolsMin() ? T.tools.el.offsetWidth : 0;   // minimized: Turn Controls take the row, the tools button sits at its end
+    const tw = row ? (mw ? a.w - M - mw : Math.round((a.w - M) * 0.58)) : a.w, uw = mw || (row ? a.w - M - tw : a.w);
     const hp = measure(T[left], pw); measure(T[right], pw); const hc = measure(T.ctrls, tw), ht = measure(T.tools, uw);
     const rowH = row ? Math.max(hc, ht) : hc + M + ht;
     const s = clamp(Math.min(a.w, a.h - extra - M - hp - M - rowH - (histOn ? 150 + M : 0)), bl.minW, bl.maxW);
@@ -188,14 +199,15 @@ function defaults(o) {
     g.hist = histOn && a.y1 - below >= 150 ? { x: a.x0, y: below, w: a.w, h: Math.min(a.y1 - below, 560) }
       : { x: a.x0 + (a.w - wid) / 2, y: a.y0, w: wid, h: clamp(Math.min(a.h, 560, 0.7 * innerHeight), 160, a.h) };
   }
-  return g;
+  return fin();
 }
 
 export function refreshWorkspace() {
   if (!ws.enabled || !things.board) return;
   const o = orient(), mods = Object.values(things).filter(t => t.def && !t.def.popup);
-  const D = mods.some(t => !ws[o][t.id]) ? defaults(o) : null;   // overrides are only clamped for display, never rewritten
-  for (const t of mods) applyGeom(t, ws[o][t.id] || D[t.id]);
+  syncTools();
+  const D = mods.some(t => !ws[o][gid(t)]) ? defaults(o) : null;   // overrides are only clamped for display, never rewritten
+  for (const t of mods) applyGeom(t, ws[o][gid(t)] || D[gid(t)]);
   const bt = things.board, a = area(), over = bt.el.getBoundingClientRect().bottom - a.y1;   // display-only guard: wrapper chrome can differ by a few px from the estimate
   if (over > 0.5) { const w = bt.el.getBoundingClientRect().width; setSize(bt, w - over); setPos(bt, parseFloat(bt.el.style.left) || a.x0, parseFloat(bt.el.style.top) || a.y0); }
 }
@@ -207,14 +219,14 @@ const schedule = (() => { let f = 0; return () => { if (f) return; f = requestAn
 // ---------- commit (only on pointerup / keyboard step, never while moving) ----------
 function commit(t, resized) {
   const r = t.el.getBoundingClientRect(), o = orient();
-  if (ws.enabled && t.def && !t.def.popup) { ws[o][t.id] = geomOf(t); saveWS(); return; }
+  if (ws.enabled && t.def && !t.def.popup) { ws[o][gid(t)] = geomOf(t); saveWS(); return; }
   const rec = [r.left, r.top];
   if (t.def?.popup && (resized || saved[t.id]?.[2])) rec.push(r.width);   // width is only remembered once the user has chosen one
   saved[t.id] = rec; savePopups();
 }
 function resetOne(t) {
   const o = orient();
-  if (ws.enabled && t.def && !t.def.popup) { delete ws[o][t.id]; saveWS(); }
+  if (ws.enabled && t.def && !t.def.popup) { delete ws[o][gid(t)]; saveWS(); }
   if (inWs(t)) return refreshWorkspace();
   delete saved[t.id]; savePopups(); if (t.def && t.id === 'dlg') t.el.style.removeProperty('width'); t.place();
 }
@@ -352,7 +364,7 @@ export const isFloating = () => ws.enabled;
 export function initWorkspace() {   // after buildDom(): the player panels exist now
   for (const id of ['board', 'p0', 'p1', 'ctrls', 'tools']) {
     const el = document.querySelector(DEFS[id].sel);
-    const t = things[id] = { id, el, def: DEFS[id], isPopup: false, canMove: () => ws.enabled, canResize: () => ws.enabled };
+    const t = things[id] = { id, el, def: DEFS[id], isPopup: false, canMove: () => ws.enabled, canResize: () => ws.enabled && !(id === 'tools' && toolsMin()) };
     if (id !== 'board') el.addEventListener('pointerdown', () => raise(t), true);   // board interaction never takes part in foreground ordering
   }
   // Content can change a module's height after layout (counter row, rack, labels, fonts): re-fit then, but never while the user is dragging one.
@@ -376,10 +388,74 @@ function dockTools(on) {
     homeOrder ??= [...turn.querySelectorAll(':scope > .btn')].map(b => b.id);
     tools.classList.add('ctrls');   // it is a button rack like the other one: every .ctrls rule (grid, button styles, container sizing) applies
     for (const id of TOOL_IDS) { const b = document.getElementById(id); if (b) tools.append(b); }
+    ensureToggle(tools);
   } else {
+    document.getElementById('toolsToggle')?.remove();
+    delete tools.dataset.min;
     tools.classList.remove('ctrls');
     for (const id of homeOrder || []) { const b = document.getElementById(id); if (b) turn.append(b); }
   }
+}
+// ---- Game Tools: minimize / restore ----
+const ICON = { fold: 'M5 12h14', apps: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z' };
+function syncTools() {   // idempotent: touches the DOM only when something actually changed, so a refresh never invalidates styles for nothing
+  const t = things.tools; if (!t) return;
+  const min = toolsMin(), v = String(min);
+  if (t.el.dataset.min !== v) t.el.dataset.min = v;
+  const b = document.getElementById('toolsToggle'); if (!b) return;
+  const txt = min ? 'أدوات اللعبة' : 'طي أدوات اللعبة', path = b.querySelector('path'), d = min ? ICON.apps : ICON.fold;
+  if (b.getAttribute('aria-expanded') !== String(!min)) b.setAttribute('aria-expanded', String(!min));
+  if (b.getAttribute('aria-label') !== txt) { b.setAttribute('aria-label', txt); b.title = txt; }
+  if (path.getAttribute('d') !== d) path.setAttribute('d', d);
+}
+// Collapse/expand around the corner nearest to the module, so the module grows out of (or shrinks into) the spot the user tapped, then remember the result.
+function setToolsMin(min) {
+  const t = things.tools, o = orient(), a = area();
+  if (!t || !ws.enabled || min === toolsMin()) return;
+  const r = t.el.getBoundingClientRect(), right = r.left + r.width / 2 > (a.x0 + a.x1) / 2, bottom = r.top + r.height / 2 > (a.y0 + a.y1) / 2;
+  // Toggling a secondary tool must not shift anything else: modules still following the computed defaults (which depend on this state, e.g. the board height in
+  // portrait) are pinned where they are right now before the state changes.
+  for (const m of Object.values(things)) if (m.def && !m.def.popup && !ws[o][gid(m)]) ws[o][gid(m)] = geomOf(m);
+  if (min) ws[o].tools = geomOf(t);   // the expanded layout is kept, so restoring brings back the size the user had
+  ws.tools = min ? 'min' : 'open'; syncTools();
+  if (!min) setSize(t, ws[o].tools?.w ?? clamp(Math.round(Math.min(a.w, a.h) * 0.62), 160, limits(t).maxW));
+  const n = t.el.getBoundingClientRect();
+  let y = bottom ? r.bottom - n.height : r.top;
+  const c = things.ctrls && things.ctrls.el.getBoundingClientRect();   // Turn Controls are the frequent controls: a restored module slides clear of them, away from the edge it grew from
+  if (!min && c && n.left < c.right && n.left + n.width > c.left && y < c.bottom && y + n.height > c.top) y = bottom ? c.top - 8 - n.height : c.bottom + 8;
+  setPos(t, right ? r.right - n.width : r.left, y);
+  commit(t);   // files the geometry under the new state's key and persists the state
+}
+function ensureToggle(tools) {
+  let b = document.getElementById('toolsToggle'); if (b) return b;
+  b = document.createElement('button'); b.type = 'button'; b.id = 'toolsToggle'; b.className = 'toolsToggle'; b.setAttribute('aria-controls', 'tools');
+  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path/></svg>';
+  tools.append(b); bindToolsToggle(things.tools, b); return b;
+}
+// Expanded: a plain collapse button. Minimized: the button IS the module, so the same element is also its drag handle (a short press toggles, a drag moves).
+function bindToolsToggle(t, b) {
+  let d = null, swallow = false;
+  b.addEventListener('pointerdown', e => {
+    if (e.button || !toolsMin()) return;
+    const r = t.el.getBoundingClientRect(); d = { x: e.clientX, y: e.clientY, ox: e.clientX - r.left, oy: e.clientY - r.top, moved: false };
+    try { b.setPointerCapture(e.pointerId); } catch { /* not capturable: dragging just ends on release */ }
+  });
+  b.addEventListener('pointermove', e => {
+    if (!d) return;
+    if (!d.moved) { if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return; d.moved = true; t.el.classList.add('flActive'); }
+    setPos(t, e.clientX - d.ox, e.clientY - d.oy);
+  });
+  const end = () => {
+    if (!d) return; const moved = d.moved; d = null; t.el.classList.remove('flActive');
+    if (moved) { swallow = true; setTimeout(() => { swallow = false; }, 0); commit(t); }   // the click that follows a drag must not toggle
+  };
+  b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end);
+  b.addEventListener('click', () => { if (swallow) { swallow = false; return; } setToolsMin(!toolsMin()); });
+  b.addEventListener('keydown', e => {
+    if (!toolsMin() || !e.key.startsWith('Arrow')) return;
+    e.preventDefault(); const step = e.shiftKey ? 48 : 12, r = t.el.getBoundingClientRect();
+    setPos(t, r.left + (e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0), r.top + (e.key === 'ArrowDown' ? step : e.key === 'ArrowUp' ? -step : 0)); commit(t);
+  });
 }
 function enter() {
   html().dataset.floating = 'true';

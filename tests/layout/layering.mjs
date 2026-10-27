@@ -8,7 +8,7 @@ const settle = p => p.evaluate(() => new Promise(r => requestAnimationFrame(() =
 const rect = (p, s) => p.$eval(s, e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
 const drag = async (p, from, dx, dy) => { const r = await rect(p, from); const x = r.x + r.w / 2, y = r.y + r.h / 2; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx / 2, y + dy / 2, { steps: 4 }); await p.mouse.move(x + dx, y + dy, { steps: 4 }); await p.mouse.up(); await settle(p); };
 const WSKEY = 'scrabble.floatWorkspace.v2';
-const ON = { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify({ v: 2, enabled: true, portrait: {}, landscape: {} }) };   // drawer history, workspace ON
+const ON = { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify({ v: 2, enabled: true, tools: 'open', portrait: {}, landscape: {} }) };   // drawer history, workspace ON
 const Z = p => p.evaluate(() => Object.fromEntries([['board', '.boardWrap'], ['p0', '#pn0'], ['p1', '#pn1'], ['ctrls', '.ctrls'], ['tools', '#tools'], ['hist', '#hist']].map(([k, s]) => [k, +getComputedStyle(document.querySelector(s)).zIndex])));
 const above = (z, k) => z[k] > z.board;
 // strict hierarchy: Board < player panels < Turn Controls < Game Tools
@@ -121,7 +121,7 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
 }
 // a restart with the workspace ON and saved geometry: order is right from the first paint
 {
-  const g = JSON.stringify({ v: 2, enabled: true, portrait: {}, landscape: { board: { x: 300, y: 10, s: 520 }, p0: { x: 330, y: 200, w: 220 }, p1: { x: 340, y: 380, w: 220 }, ctrls: { x: 320, y: 560, w: 260 } } });
+  const g = JSON.stringify({ v: 2, enabled: true, tools: 'open', portrait: {}, landscape: { board: { x: 300, y: 10, s: 520 }, p0: { x: 330, y: 200, w: 220 }, p1: { x: 340, y: 380, w: 220 }, ctrls: { x: 320, y: 560, w: 260 } } });
   const { page: p } = await openGame(b, VIEWPORTS['desktop 1366x768'], { storage: { 'scrabble.layout': '{}', [WSKEY]: g } }); await settle(p);
   const z = await Z(p); ok(hier(z), 'restart with saved overlapping geometry: board lowest ' + JSON.stringify(z));
   ok(await onTop(p, '#pn0') && await onTop(p, '#pn1'), 'restart: overlapping racks are painted above the board');
