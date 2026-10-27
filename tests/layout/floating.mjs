@@ -113,7 +113,7 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   const c0 = await rect(p, '.ctrls'); await drag(p, '.ctrls .flMove', 15, -15);
   await drag(p, '.ctrls .flGrip', -80, 0);
   const c1 = await rect(p, '.ctrls'); ok(c1.w < c0.w - 20, 'controls resized as one palette'); ok(c1.h >= c0.h - 1, 'narrower controls reflow (height does not shrink)');
-  ok(await p.evaluate(() => [...document.querySelectorAll('.ctrls .btn')].every(x => { const r = x.getBoundingClientRect(); return r.width >= 36 && r.height >= 30; })), 'buttons keep touch size');
+  ok(await p.evaluate(() => [...document.querySelectorAll('.ctrls .btn')].filter(x => getComputedStyle(x).display !== 'none').every(x => { const r = x.getBoundingClientRect(); return r.width >= 36 && r.height >= 30; })), 'buttons keep touch size');
   // 28 keyboard move/resize
   await p.focus('#pn1 .flMove'); const k0 = await rect(p, '#pn1'); await p.keyboard.press('ArrowLeft'); await p.keyboard.press('ArrowUp'); await settle(p);
   const k1 = await rect(p, '#pn1'); ok(k1.x < k0.x && k1.y < k0.y, 'keyboard arrows move a module');

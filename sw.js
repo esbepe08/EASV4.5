@@ -19,7 +19,7 @@
  */
 'use strict';
 
-const VERSION = '8a506ea8590f';   // stamped by tools/stamp-sw.mjs
+const VERSION = '0741a26f09a2';   // stamped by tools/stamp-sw.mjs
 const PREFIX = 'arabic-scrabble-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const RUNTIME = `${PREFIX}runtime-${VERSION}`;

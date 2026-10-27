@@ -7,7 +7,7 @@ const settle = p => p.evaluate(() => new Promise(r => requestAnimationFrame(() =
 const rect = (p, s) => p.$eval(s, e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
 const drag = async (p, from, dx, dy) => { const r = await rect(p, from); const x = r.x + r.w / 2, y = r.y + r.h / 2; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx / 2, y + dy / 2, { steps: 3 }); await p.mouse.move(x + dx, y + dy, { steps: 3 }); await p.mouse.up(); await settle(p); };
 const WSKEY = 'scrabble.floatWorkspace.v2';
-const ON = { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify({ v: 2, enabled: true, portrait: {}, landscape: {} }) };
+const ON = { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify({ v: 2, enabled: true, tools: 'open', portrait: {}, landscape: {} }) };
 const OFF = { 'scrabble.layout': '{}' };
 const ids = (p, s) => p.$$eval(s + ' > .btn', n => n.map(x => x.id));
 const HOME = ['bSubmit', 'bCancel', 'bSwap', 'bPass', 'bUndo', 'bNew', 'bJudge', 'bLog', 'bFs', 'bSettings'];

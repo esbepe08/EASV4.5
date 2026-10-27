@@ -8,7 +8,7 @@ const settle = p => p.evaluate(() => new Promise(r => requestAnimationFrame(() =
 const rect = (p, s) => p.$eval(s, e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
 const drag = async (p, from, dx, dy) => { const r = await rect(p, from); const x = r.x + r.w / 2, y = r.y + r.h / 2; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x + dx / 2, y + dy / 2, { steps: 3 }); await p.mouse.move(x + dx, y + dy, { steps: 3 }); await p.mouse.up(); await settle(p); };
 const WSKEY = 'scrabble.floatWorkspace.v2';
-const ON = { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify({ v: 2, enabled: true, portrait: {}, landscape: {} }) };
+const ON = { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify({ v: 2, enabled: true, tools: 'open', portrait: {}, landscape: {} }) };
 const MODS = ['.boardWrap', '#pn0', '#pn1', '.ctrls', '#tools'];
 const outOfView = async p => { const [W, H] = await p.evaluate(() => [innerWidth, innerHeight]); for (const s of MODS) { const r = await rect(p, s); if (r.x < -0.5 || r.y < -0.5 || r.x + r.w > W + 0.5 || r.y + r.h > H + 0.5) return `${s} ${JSON.stringify(r)} in ${W}x${H}`; } return ''; };
 const hit = (a, c) => Math.min(a.x + a.w, c.x + c.w) - Math.max(a.x, c.x) > 2 && Math.min(a.y + a.h, c.y + c.h) - Math.max(a.y, c.y) > 2;
@@ -66,7 +66,7 @@ ok(M('390x844').pw <= 390 && M('360x800').pw <= 360 && M('844x390').pw <= 844, '
 // Saved geometry: clamped for display on a smaller window, NOT rewritten, and restored when the room returns; live window resizing and rotation never break it.
 {
   const vp = { width: 1920, height: 1080, deviceScaleFactor: 1 };
-  const saved = { v: 2, enabled: true, portrait: {}, landscape: { board: { x: 40, y: 20, s: 700 }, p0: { x: 760, y: 30, w: 640 }, p1: { x: 760, y: 400, w: 600 }, ctrls: { x: 1000, y: 800, w: 700 } } };
+  const saved = { v: 2, enabled: true, tools: 'open', portrait: {}, landscape: { board: { x: 40, y: 20, s: 700 }, p0: { x: 760, y: 30, w: 640 }, p1: { x: 760, y: 400, w: 600 }, ctrls: { x: 1000, y: 800, w: 700 } } };
   const { page: p, errors } = await openGame(b, vp, { storage: { 'scrabble.layout': '{}', [WSKEY]: JSON.stringify(saved) } }); await settle(p); await settle(p);
   const r0 = await rect(p, '#pn0'); ok(Math.abs(r0.w - 640) < 2 && Math.abs(r0.x - 760) < 2, 'saved geometry that fits is restored as it was');
   for (const [W, H] of [[1280, 720], [900, 600], [700, 1000], [1100, 800], [1920, 1080]]) {
