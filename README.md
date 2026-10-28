@@ -18,6 +18,9 @@ This project evolved from the original repository, [DAXEI08/update-version](http
 - Human **tahkim** (judging): the challenger rules the last move **✔ صحيح** or **✖ خطأ**
 - Move history with words, scores, bingos, passes, swaps and tahkim verdicts, with a show/hide toggle (إخفاء السجل / إظهار السجل) that never moves the racks, buttons or board
 - Blank tiles (always worth 0)
+- **Player names**: rename either player (press and hold, double-click or Enter on the name; or Settings → اللاعبون). Saved on the device
+- **Word flash**: the words a move just scored light up letter by letter in reading order
+- **Touch vibration** on phones and tablets, with an off switch in Settings; **fullscreen** from Settings in every layout
 - Responsive layout for desktop, tablet and mobile, portrait and landscape
 - Optional **Floating Workspace**: move and resize the board, player panels, controls and word log directly (no size sliders in Settings)
 - **Installable, offline-capable PWA** (Android, iPhone/iPad, desktop) and **automatic match recovery** after a refresh, close or suspension (see "PWA" below)
@@ -86,6 +89,22 @@ Architecture in one line each: the **default layout** is stable, responsive CSS 
 - **Primary action**: `#bSubmit` is a checkmark only in every button style (the words احتساب / تأكيد التبديل (n) remain in its `aria-label` and tooltip).
 - Code: `js/float.js` (one engine for popups and modules), `js/layout.js`, `js/ui.js` (`ask()`, input lock), `css/float.css`. Game rules, scoring, clocks and board input are untouched.
 - Tests: `tests/layout/floating.mjs`.
+
+## Player names, word flash, touch feedback
+
+**Player names** (`js/names.js`, `js/nameedit.js`). A name is a device preference, like the theme and the layout: it changes how a player is *shown* (panels, rack label, history, toasts, tahkim dialogue, result, resume prompt), never a rule, score or clock. It is not stored inside a saved match.
+- In place: **press and hold** the name for half a second (a line fills under it), **double-click** it, or focus it and press **Enter / F2 / Space**. Enter or leaving the field keeps the name, **Esc** discards. The field takes over the label's exact row, so nothing around it moves. The clock of the player on turn is frozen while the field is open.
+- In Settings (**اللاعبون**): two fields applied as you type, so the panels behind the sheet follow. This route is also the most reliable on touch (see limitations).
+- Rules: up to 16 characters (counted as user-perceived characters, so Arabic marks are never cut off a letter); empty = the original name; a name already used by the other player (ignoring case and Arabic marks) is refused; control, zero-width and direction-override characters are removed. Names go through `esc()` wherever they enter HTML and are wrapped in `<bdi>` / direction isolates so a Latin name never scrambles the Arabic around it.
+- Stored as `scrabble.names = {v:1, n:[name|null, name|null]}`: only overrides; missing, corrupted or duplicate values fall back to the defaults.
+
+**Word flash** (`js/flash.js`, `.sq.wf` in `css/style.css`). After a scored move, every word it formed (the new word and each word it crossed) flashes square by square. There is no overlay to position: a board square is `#board.children[r * 15 + c]`, so the highlight scales and moves with the board (Floating Workspace included). Reading order comes from the data (horizontal words run right to left because the board is RTL, vertical words top to bottom); a square shared by two words lights up with the first one to reach it. One opacity pulse on the square's `::after`; Undo and a tahkim ✖ stop it. With *reduce motion* the words are simply held highlighted for about a second, with no sequence.
+
+**Turn dot**. The player on turn has a small green dot before the name (fixed size, so it never changes a panel or rack), breathing softly; still with reduce motion.
+
+**Touch vibration** (`js/haptics.js`). A short tick on every touch/pen press of a button, tile, square or rack slot; distinct patterns for a scored move, a bingo, a refused move or hint, and the end of the game. Nothing happens for a mouse or before the first touch. Android browsers use `navigator.vibrate`; iPhone/iPad Safari has no Vibration API, so a best-effort switch-control haptic (iOS 18+) gives a single tick there where supported. The switch (الاهتزاز عند اللمس) appears in Settings only on touch devices. Stored as `scrabble.haptics` (`off` when switched off).
+
+**Fullscreen**. The Game Tools button still exists in the Floating Workspace; Settings → التطبيق now also has a **ملء الشاشة** button, so the default layout can enter fullscreen too. Both hide themselves where the API does not exist (iPhone Safari) or the app already runs fullscreen.
 
 ## Layout (الإعدادات → التخطيط)
 
@@ -168,6 +187,7 @@ If you add or remove a file the game loads, update `PRECACHE` in `sw.js` (the st
 
 - Install flows on real Android and iOS devices, real GitHub Pages HTTPS, and Safari service-worker behaviour were not tested by the author of this change; see the test notes below for what was.
 - iOS may evict a website's storage after a period of non-use; an app added to the Home Screen is not subject to that, a Safari tab can be.
+- Vibration and in-place name editing were verified in desktop Chromium (touch emulation, a stubbed `navigator.vibrate`), not on real phones. iOS Safari only opens the keyboard for a field focused directly from a tap, so after a long press on iPhone the field may need one more tap before the keyboard appears; Settings → اللاعبون always works. The iOS haptic is best-effort and iOS 18+ only.
 - Offline caching covers the app itself; there is nothing online to sync, so no background sync or push is used.
 
 ## Technology
@@ -210,6 +230,10 @@ js/
   cover.js        cover screen (title in game tiles)
   main.js         start-up
   persist.js      match save / restore / resume prompt, pause-while-hidden
+  names.js        player names: defaults, cleaning, duplicates, escaping, storage (no DOM)
+  nameedit.js     editing names in place and in Settings
+  flash.js        word flash after a scored move
+  haptics.js      touch vibration and its Settings switch
   pwa.js          service-worker registration, update bar, install UI
 
 tests/            dev-only tests (not needed to play; see "Tests")
@@ -220,6 +244,7 @@ tests/            dev-only tests (not needed to play; see "Tests")
     harness.mjs   loads the real modules in jsdom
     engine.mjs    modes, scoring, blanks, undo, tahkim, pass, themes
     startup.mjs   real main.js start-up, cover, setup flow, Settings
+    names.mjs     names store: cleaning, duplicates, escaping, storage, corrupted values
   layout/
     lib.mjs       real-browser helpers (viewports, geometry, pixel checks)
     serve.mjs     tiny static server used by the tests
@@ -227,6 +252,7 @@ tests/            dev-only tests (not needed to play; see "Tests")
     baseline.json reference layout of the docked history panel (see "Tests")
     history-toggle.mjs        bounding boxes before/after hide and show in 8 viewports
     history-toggle-extra.mjs  keyboard, persistence, obsolete scrabble.dims discarded, all themes
+    feel.mjs                  names (in place + Settings), word flash, turn dot, haptics, fullscreen from Settings
     log-icon.mjs              default drawer: the word-log icon's size, corner, no overlap, open/close (2 layouts x 8 viewports)
 
 manifest.webmanifest  PWA manifest

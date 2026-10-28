@@ -10,7 +10,7 @@
 // Storage: scrabble.float (popup positions, unchanged format) and scrabble.floatWorkspace.v2 (on/off + per-orientation geometry). Every saved module
 // also remembers the area (aw, ah) and its own height (bh) it was saved in, so a different viewport maps the layout proportionally (see applyGeom).
 // Pure UI: no game state is read or written here.
-import { NAMES } from './config.js';
+import { nameOf, onNamesChange } from './names.js';
 
 const LEGACY = 'scrabble.float', WSKEY = 'scrabble.floatWorkspace.v2', M = 8;
 const ORI = ['portrait', 'landscape'];
@@ -61,8 +61,8 @@ const fit = (x, y, w, h) => { const a = area(); return [clamp(x, a.x0, a.x1 - w)
 // axes: 's' = square (board, 1:1), 'x' = width only (height follows the content, so racks and buttons are never stretched), 'xy' = both
 const DEFS = {
   board: { sel: '.boardWrap', axes: 's', label: 'اللوح' },
-  p0: { sel: '#pn0', axes: 'x', label: NAMES[0] },
-  p1: { sel: '#pn1', axes: 'x', label: NAMES[1] },
+  p0: { sel: '#pn0', axes: 'x', get label() { return nameOf(0); } },   // the players' labels follow their names (see relabel)
+  p1: { sel: '#pn1', axes: 'x', get label() { return nameOf(1); } },
   ctrls: { sel: '.ctrls', axes: 'x', label: 'أزرار الدور' },          // Turn Controls
   tools: { sel: '#tools', axes: 'x', label: 'أدوات اللعبة' },        // Game Tools
   hist: { axes: 'xy', label: 'سجل الكلمات' },
@@ -299,13 +299,20 @@ function addChrome(t) {
   if (t.chrome) return; t.chrome = [];
   if (!t.isPopup) {   // modules without a title bar get a slim move strip (word log and dialogue reuse their title)
     const h = document.createElement('button'); h.type = 'button'; h.className = 'flMove';
-    h.setAttribute('aria-label', `تحريك ${t.def.label}: الأسهم للتحريك، + و − للحجم، نقر مزدوج لإعادة الضبط`); h.title = 'اسحب لتحريك ' + t.def.label;
     t.el.prepend(h); bindHandle(t, h); t.chrome.push(h);
   }
-  const g = document.createElement('button'); g.type = 'button'; g.className = 'flGrip';
-  g.setAttribute('aria-label', `تغيير حجم ${t.def.label}: الأسهم`); g.title = 'اسحب لتغيير الحجم'; g.innerHTML = GRIP;
+  const g = document.createElement('button'); g.type = 'button'; g.className = 'flGrip'; g.innerHTML = GRIP;
   t.el.append(g); bindGrip(t, g); t.chrome.push(g);
+  relabel(t);
 }
+// The handles' accessible names mention the module (for the players: the player's current name), so they are rewritten when a name changes.
+function relabel(t) {
+  for (const n of t.chrome || []) {
+    if (n.classList.contains('flMove')) { n.setAttribute('aria-label', `تحريك ${t.def.label}: الأسهم للتحريك، + و − للحجم، نقر مزدوج لإعادة الضبط`); n.title = 'اسحب لتحريك ' + t.def.label; }
+    else { n.setAttribute('aria-label', `تغيير حجم ${t.def.label}: الأسهم`); n.title = 'اسحب لتغيير الحجم'; }
+  }
+}
+onNamesChange(() => { for (const id of ['p0', 'p1']) if (things[id]) relabel(things[id]); });
 const removeChrome = t => { (t.chrome || []).forEach(n => n.remove()); t.chrome = null; };
 const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z-index', '--float-board-size']) t.el.style.removeProperty(p); };
 

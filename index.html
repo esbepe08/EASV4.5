@@ -60,14 +60,21 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <div class="setPanel">
 <h3 class="setH">المظهر</h3>
 <div class="thGrid" id="thB" role="group" aria-label="المظهر"></div>
+<h3 class="setH">اللاعبون</h3>
+<div class="dimList" id="nmB"></div>
 <h3 class="setH">التخطيط</h3>
 <div class="dimList" id="lyB"></div>
 <button class="btn" id="flReset" type="button">إعادة ضبط العناصر العائمة</button>
+<div id="hpSec" hidden>
+<h3 class="setH">اللمس</h3>
+<div class="dimList" id="hpB"></div>
+</div>
 <h3 class="setH">التطبيق</h3>
 <div class="pwaBox">
 <p id="pwaStatus" class="pwaStatus" role="status"></p>
 <button class="btn main" id="pwaInstall" type="button" hidden>تثبيت التطبيق</button>
 <p id="pwaHint" class="pwaStatus" hidden></p>
+<button type="button" class="btn" id="fsSet" aria-pressed="false" aria-label="ملء الشاشة" title="ملء الشاشة"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="lbl">ملء الشاشة</span></button>
 </div>
 </div>
 </dialog>

@@ -1,8 +1,11 @@
 // Gameplay operations: clock, move transaction, turn flow, pass/swap/undo, end of game.
-import { MIN_BAG_SWAP, NAMES, REASONS } from './config.js';
+import { MIN_BAG_SWAP, REASONS } from './config.js';
 import { $, S, app, shuffle, inMove, cur, refill, pushHist, snapshot, restore, createState, profile } from './state.js';
 import { analyze, scoreWords } from './scoring.js';
 import { toast, fail, showResult, render, tickUI, chooseMode, openBlankPicker, buildBlankPicker } from './ui.js';
+import { nameOf, nameIso } from './names.js';
+import { flashWords, clearFlash } from './flash.js';
+import { haptic } from './haptics.js';
 
 // ---------- Clock (timestamp based; driven by a single interval in main.js) ----------
 export function tick() {
@@ -17,6 +20,7 @@ function setTurn(i) { tick(); if (S.ended) return false; S.cur = i; S.last = per
 
 export function newGame(min = app.minutes, mode = app.mode) {
   createState(min, mode);
+  clearFlash();
   buildBlankPicker();
   toast(`لعبة جديدة · ${profile().labelAr} · ${app.minutes} دقيقة`, false);
   render();
@@ -60,9 +64,10 @@ export function submit() {
   pushHist({p: S.cur, type: 'move', words: r.list, total: pts, bingo: r.bingo});
   p.score += pts; S.move = []; S.pick = null; S.pop = S.cur;
   refill(p);
-  toast(`${NAMES[S.cur]}: +${pts} نقطة`, false);
-  if (!p.rack.some(Boolean)) return endGame('rack');
-  nextTurn(true);
+  toast(`${nameIso(S.cur)}: +${pts} نقطة`, false);
+  haptic(r.bingo ? 'bingo' : 'score');
+  if (!p.rack.some(Boolean)) endGame('rack'); else nextTurn(true);
+  flashWords(a.words);   // after the render: the words just scored light up in reading order (js/flash.js)
 }
 export function nextTurn(scored) {
   if (!setTurn(1 - S.cur)) return;
@@ -73,13 +78,14 @@ export function undo() {
   const u = S.undo;
   if (!u || S.ended || S.swap || S.move.length) return;
   tick(); if (S.ended) return;
+  clearFlash();   // the move being taken back must not keep lighting up
   restore(u); S.hist.pop(); S.hv++;
   toast('تم التراجع عن الحركة الأخيرة', false); render();
 }
 export function pass() {
   if (S.ended || S.swap || S.move.length) return;
   S.undo = null; pushHist({p: S.cur, type: 'pass'});   // passing is unlimited
-  toast(`${NAMES[S.cur]} مرّر الدور`, false); nextTurn();
+  toast(`${nameIso(S.cur)} مرّر الدور`, false); nextTurn();
 }
 export function startSwap() {
   if (S.ended || S.move.length) return;
@@ -109,7 +115,7 @@ export function endGame(reason) {
   const rows = S.players.map((p, i) => {
     const ded = p.rack.reduce((s, t) => s + (t ? t.v : 0), 0), bon = Math.floor(p.ms / 60000);
     p.score = Math.max(0, p.score - ded + bon);
-    return {name: NAMES[i], score: p.score, ded, bon};
+    return {name: nameOf(i), score: p.score, ded, bon};
   });
   const [a, b] = [rows[0].score, rows[1].score];
   render();
