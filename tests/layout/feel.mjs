@@ -99,6 +99,43 @@ const store = (p, k) => p.evaluate(k => localStorage.getItem(k), k);
   ok(await page.evaluate(() => !document.querySelector('.wf')), 'undo stops the flash');
   await closeGame(page);
 }
+// ---------- info bar under the board (mode · bag count) ----------
+{
+  const DEFAULT = { storage: { 'scrabble.layout': '{}' } }, BAR_ON = { storage: { 'scrabble.layout': '{"binfo":"on"}' } };
+  const probe = p => p.evaluate(() => { const b = document.querySelector('#bagInfo'), r = b.getBoundingClientRect(), bd = document.querySelector('#bagBadge'), bs = document.querySelector('#board').getBoundingClientRect();
+    return { pos: getComputedStyle(b).position, w: r.width, h: r.height, text: b.textContent, badge: bd.textContent, badgeShown: bd.offsetWidth > 0, hbag: document.querySelector('#hBag').textContent, hbagShown: document.querySelector('#hBag').offsetWidth > 0, board: bs.width, bin: document.documentElement.dataset.binfo, n: window.__n }; });
+  const d = await openGame(b, DESK, DEFAULT), on = await openGame(b, DESK, BAR_ON);
+  const a = await probe(d.page), c = await probe(on.page);
+  ok(a.bin === 'off' && a.pos === 'absolute' && a.w <= 1 && a.h <= 1, 'default: the info bar is out of the layout');
+  ok(/الكيس: \d+/.test(a.text) && a.text === a.hbag, 'but its text stays in the page (screen readers) and in the word log');
+  ok(a.badgeShown && a.badge === a.text.match(/\d+/)[0], 'the bag count is on the swap button');
+  ok(c.bin === 'on' && c.h > 10 && !c.badgeShown && !c.hbagShown, 'bar on: bar visible, badge and log line hidden (no duplicate)');
+  ok(a.board > c.board + 20, `the board uses the room the bar gave up (${c.board} -> ${a.board})`);
+  // setting
+  await d.page.click('#bSettings'); await d.page.waitForSelector('#ad[open]');
+  ok(await d.page.$eval('#lyB button[data-k="binfo"][aria-pressed="true"]', e => e.dataset.v) === 'off', 'Settings: the info bar row exists, default hidden');
+  await d.page.click('#lyB button[data-k="binfo"][data-v="on"]');
+  ok(await d.page.evaluate(() => document.documentElement.dataset.binfo === 'on' && JSON.parse(localStorage.getItem('scrabble.layout')).binfo === 'on'), 'switching it on applies and saves');
+  await d.page.click('#aClose');
+  // badge states and the swap tooltip
+  await d.page.evaluate(async () => { const st = await import('/js/state.js'); const ui = await import('/js/ui.js'); window.__set = n => { st.S.bag.length = n; ui.render(); }; });
+  const st = async n => { await d.page.evaluate(n => window.__set(n), n); return d.page.evaluate(() => ({ s: document.querySelector('#bagBadge').dataset.s, t: document.querySelector('#bagBadge').textContent, sr: document.querySelector('#bagSr').textContent, title: document.querySelector('#bSwap').title })); };
+  let r = await st(30); ok(r.s === 'ok' && r.t === '30', 'badge muted while swapping is easy');
+  r = await st(7); ok(r.s === 'low' && /7/.test(r.title), 'at 7: highlighted, tooltip carries the count');
+  r = await st(6); ok(r.s === 'stop' && /لا يمكن التبديل/.test(r.sr), 'below 7: struck and the accessible name says swapping is over');
+  r = await st(0); ok(r.s === 'stop' && /فارغ/.test(r.sr), 'empty bag: said so');
+  // endgame notes
+  const note = await d.page.evaluate(async () => { const { bagNote } = await import('/js/ui.js'); document.documentElement.dataset.binfo = 'off';
+    const o = [bagNote(10, 7), bagNote(8, 1), bagNote(9, 2), bagNote(3, 0), bagNote(20, 14), bagNote(6, 3)]; document.documentElement.dataset.binfo = 'on'; o.push(bagNote(10, 7)); return o; });
+  ok(note[0].includes('بقي 7 قطع') && note[1].includes('قطعة واحدة') && note[2].includes('قطعتان') && note[3].includes('نفد'), 'notes: 7, 1, 2 and empty');
+  ok(note[4] === '' && note[5] === '' && note[6] === '', 'no note when nothing was crossed, or when the bar is shown');
+  await closeGame(d.page); await closeGame(on.page);
+  const m = await openGame(b, DESK, DEFAULT);
+  await m.page.evaluate(async () => { const { S, cur } = await import('/js/state.js'); const G = await import('/js/game.js'); S.bag.length = 9;
+    const [x, y, z] = cur().rack.filter(t => t && !t.blank); G.place(x, 7, 6); G.place(y, 7, 7); G.place(z, 7, 8); G.submit(); });
+  ok(/بقي 6 قطع في الكيس/.test(await m.page.$eval('#toast', e => e.textContent)), 'the move that takes the bag below 8 says so in its toast');
+  await closeGame(m.page);
+}
 // ---------- turn dot ----------
 {
   const { page } = await openGame(b, DESK);

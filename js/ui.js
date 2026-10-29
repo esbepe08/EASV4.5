@@ -1,6 +1,6 @@
 import { showFloat, gameInert, lockGame } from './float.js';
 // DOM rendering, toasts and dialogs. Reads state; never mutates game rules.
-import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL } from './config.js';
+import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL, MIN_BAG_SWAP } from './config.js';
 import { TILE_MODES } from './modes.js';
 import { $, S, app, fmt, inMove, cur, profile } from './state.js';
 import { nameOf, nameHtml, nameIso, esc, onNamesChange } from './names.js';
@@ -157,7 +157,27 @@ function renderControls() {
   $('#bPass').disabled = E || S.swap || mv;
   $('#bUndo').disabled = E || S.swap || mv || !S.undo;
   $('#bJudge').disabled = E || S.swap || mv || !S.undo;
-  $('#bagInfo').textContent = `${profile().labelAr} · الكيس: ${S.bag.length}`;
+  renderBag();
+}
+
+// The bag count: in the info bar (when shown), in the word log, and on the swap button, the one action it limits. Text is only rewritten when it changes, so nothing is re-announced.
+const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+function renderBag() {
+  const n = S.bag.length, info = `${profile().labelAr} · الكيس: ${n}`, canSwap = n >= MIN_BAG_SWAP;
+  setText($('#bagInfo'), info); setText($('#hBag'), info);
+  const badge = $('#bagBadge'), sw = $('#bSwap');
+  badge.dataset.s = n === 0 || !canSwap ? 'stop' : n <= MIN_BAG_SWAP ? 'low' : 'ok';
+  const sub = `الكيس: ${n}`;
+  if (sw.dataset.sub !== sub) sw.dataset.sub = sub;
+  setText(badge, String(n));
+  setText($('#bagSr'), n === 0 ? '، الكيس فارغ' : canSwap ? `، في الكيس ${n} قطعة` : `، في الكيس ${n} قطعة فقط، لا يمكن التبديل`);
+}
+// Said once, when a move takes the bag down to 7 or fewer tiles (swapping ends below 7) and when it empties, added to that move's toast. Only when the info bar is hidden.
+export function bagNote(before, after) {
+  if (document.documentElement.dataset.binfo === 'on') return '';
+  if (after === 0 && before > 0) return ' · نفد الكيس';
+  if (after <= MIN_BAG_SWAP && before > MIN_BAG_SWAP) return ` · ${after === 1 ? 'بقيت قطعة واحدة' : after === 2 ? 'بقيت قطعتان' : `بقي ${after} قطع`} في الكيس`;
+  return '';
 }
 export function tickUI() {
   S.players.forEach((p, i) => {

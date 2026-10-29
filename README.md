@@ -116,8 +116,14 @@ Device preferences stored in `localStorage` under `scrabble.layout`; they only s
 - **أزرار التحكم**: icons only (default; labels remain for screen readers and as tooltips, تأكيد/احتساب keeps its text), icon over label, or the original text. Icons are inline SVG using `currentColor`, mirrored where direction matters (RTL). Icon-only mode needs one button row instead of two, which the duel board-size budget accounts for.
 - **Floating windows** (`js/float.js`): the settings panel (non-modal, game frozen behind it) and the word-log drawer are draggable windows with identical behaviour: drag the title, or focus it and use the arrow keys (Shift = larger step); double-click the title or use *إعادة مواضع النوافذ العائمة* to reset. Positions are clamped to the viewport and remembered per device. Esc closes either window.
 - **سجل الكلمات**: *عند الطلب* (default) keeps the log out of the layout and opens it as a drawer from a small icon button in the bottom corner of the board, on the end side of the bag counter (close with the same button or Esc; the label stays available to screen readers and as a tooltip); *مثبّت* keeps the original always-visible panel with its hide/show toggle.
+- **شريط معلومات اللوح**: *مخفي* (default) or *ظاهر*. The line under the board (mode · bag count, e.g. «الحروف الموسّعة · الكيس: 84») no longer takes a row of the layout, so the board can use the room (about 28 px more height on height-limited screens). The information is not gone:
+  - the **bag count is a badge on the swap button**, the one action it limits: muted while swapping is easy, accent when 7 or fewer tiles are left, struck through below 7 (swapping needs 7); the button's tooltip and accessible name carry the count and say when swapping is over;
+  - the **mode and count are the first line of the word log**;
+  - the move that takes the bag down to 7 or fewer says so in its toast («بقي 7 قطع في الكيس»), and so does the one that empties it («نفد الكيس»);
+  - the bar itself stays in the page as text for screen readers (visually clipped, still in `#bagInfo`); choosing *ظاهر* brings it back, and then the badge, the log line and the toast notes are hidden so nothing is said twice.
+  With the bar shown the layout is pixel-identical to before: the board-size formulas reserve its room through `--bagx` / `--bagxl` (97 + 28 = 125, 32 + 28 = 60, 9 + 21 = 30, 88 + 28 = 116), which are 0 when it is hidden.
 
-Note: `tests/layout/history-toggle*.mjs` exercise the docked log, so the test helper `openGame` presets `scrabble.layout` to `{"hist":"docked"}` (override it with the `storage` option); `layout/log-icon.mjs` covers the default drawer.
+Note: `tests/layout/history-toggle*.mjs` exercise the docked log, so the test helper `openGame` presets `scrabble.layout` to `{"hist":"docked","binfo":"on"}` (the old layout, bar shown: it doubles as the proof above) (override it with the `storage` option); `layout/log-icon.mjs` covers the default drawer.
 
 ## PWA: install, offline play, match recovery
 

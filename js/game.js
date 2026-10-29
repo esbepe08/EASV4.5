@@ -2,7 +2,7 @@
 import { MIN_BAG_SWAP, REASONS } from './config.js';
 import { $, S, app, shuffle, inMove, cur, refill, pushHist, snapshot, restore, createState, profile } from './state.js';
 import { analyze, scoreWords } from './scoring.js';
-import { toast, fail, showResult, render, tickUI, chooseMode, openBlankPicker, buildBlankPicker } from './ui.js';
+import { toast, fail, showResult, render, tickUI, chooseMode, openBlankPicker, buildBlankPicker, bagNote } from './ui.js';
 import { nameOf, nameIso } from './names.js';
 import { flashWords, clearFlash } from './flash.js';
 import { haptic } from './haptics.js';
@@ -63,8 +63,9 @@ export function submit() {
   S.undo = snapshot();
   pushHist({p: S.cur, type: 'move', words: r.list, total: pts, bingo: r.bingo});
   p.score += pts; S.move = []; S.pick = null; S.pop = S.cur;
+  const had = S.bag.length;
   refill(p);
-  toast(`${nameIso(S.cur)}: +${pts} نقطة`, false);
+  toast(`${nameIso(S.cur)}: +${pts} نقطة${bagNote(had, S.bag.length)}`, false);
   haptic(r.bingo ? 'bingo' : 'score');
   if (!p.rack.some(Boolean)) endGame('rack'); else nextTurn(true);
   flashWords(a.words);   // after the render: the words just scored light up in reading order (js/flash.js)

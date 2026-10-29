@@ -21,6 +21,20 @@ body{font-family:var(--font);color:var(--text-main);min-height:100dvh;padding:ma
 background:radial-gradient(ellipse at top,var(--bg-page-1),var(--bg-page-2) 70%) fixed;font-size:18px;transition:color .2s ease}
 .app{max-width:calc(760px*max(1,var(--board-scale)));margin:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 .bag{margin-top:8px;text-align:center;font-size:1rem;min-height:1.2em}
+/* Info bar under the board (mode · bag count). Hidden by default (Settings → التخطيط → شريط معلومات اللوح): it leaves the layout, so the board can use the room, but stays in the page as
+   text for screen readers. --bagx / --bagxl are the vertical room the bar used to take in the size formulas below (wide / short landscape); with the bar hidden they are 0.
+   The numbers add back to the old constants exactly (97 + 28 = 125, 32 + 28 = 60, 9 + 21 = 30, 88 + 28 = 116), so with the bar on nothing changes by a pixel. */
+html{--bagx:28px;--bagxl:21px}
+html:not([data-binfo="on"]){--bagx:0px;--bagxl:0px}
+html:not([data-binfo="on"]) .bag{position:absolute;width:1px;height:1px;min-height:0;margin:0;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.vh{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+/* The bag count rides on the swap button, the one action it limits: muted while swapping is possible, accent when 7 or fewer tiles are left, struck through when swapping is no longer allowed. Hidden when the bar is shown. */
+.bagBadge{position:absolute;inset-block-start:-6px;inset-inline-end:-4px;min-width:1.5em;padding:0 .35em;border-radius:999px;font:700 .72rem/1.5 var(--font);text-align:center;font-variant-numeric:tabular-nums;color:var(--text-main);background:var(--surface-inset);border:1px solid var(--dialog-line);pointer-events:none}
+.bagBadge[data-s="low"],.bagBadge[data-s="stop"]{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.bagBadge[data-s="stop"]{text-decoration:line-through}
+html[data-binfo="on"] .bagBadge{display:none}
+.hbag{margin:0 0 6px;font-size:.88rem;opacity:.85;line-height:1.4}
+html[data-binfo="on"] .hbag{display:none}
 .boardWrap{min-width:0;position:relative}
 .board{container-type:inline-size;--lf:4.6cqw;--vf:1.8cqw;display:grid;grid-template:repeat(15,minmax(0,1fr))/repeat(15,minmax(0,1fr));aspect-ratio:1;width:100%;max-width:calc(720px*var(--board-scale));margin-inline:auto;
 padding:1.2%;border-radius:10px;background:linear-gradient(135deg,var(--board-1),var(--board-2));border:3px solid var(--board-line);box-shadow:0 10px 30px #000a,inset 0 0 0 2px var(--board-rim)}
@@ -167,9 +181,9 @@ button,input,textarea,select{font-family:inherit}
 @media(max-width:420px){body{font-size:16px;padding-inline:4px;overflow-x:hidden}.app{gap:8px}.boardWrap{width:100%}.board{width:min(100%,calc(100vw - 8px))}.side{gap:8px}.ctrls .btn{min-height:calc(44px*var(--btn-scale))}}
 /* Desktop / 16:9: history | board | players+buttons in one screen (phones and portrait tablets keep the single column above) */
 @media(min-width:1000px) and (min-height:560px){
-.app{--A:min(calc(100vw - 16px),1600px);--bo:max(340px,min(calc((100dvh - 125px)*var(--board-scale)),calc(100vw - 640px),calc(880px*var(--board-scale))));
+.app{--A:min(calc(100vw - 16px),1600px);--bo:max(340px,min(calc((100dvh - 97px - var(--bagx))*var(--board-scale)),calc(100vw - 640px),calc(880px*var(--board-scale))));
 --sw:calc((var(--A) - 20px - var(--bo))/2);--hw:max(230px,calc(var(--sw)*.78*var(--hist-w)));
---bs:max(340px,min(calc((100dvh - 125px)*var(--board-scale)),calc(var(--A) - 20px - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
+--bs:max(340px,min(calc((100dvh - 97px - var(--bagx))*var(--board-scale)),calc(var(--A) - 20px - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
 max-width:1600px;align-items:start;justify-content:center;
 grid-template-columns:var(--sw) var(--bs) var(--hw);grid-template-areas:"head head head" "side board hist"}
 .boardWrap{grid-area:board}.side{grid-area:side}
@@ -180,7 +194,7 @@ grid-template-columns:var(--sw) var(--bs) var(--hw);grid-template-areas:"head he
 /* Tilted phones / short or narrow landscape screens: the board stays pinned on the left at full height, players + buttons sit beside it and the history follows below. */
 @media(orientation:landscape) and (max-width:999px),(orientation:landscape) and (max-height:559px){
 body{padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right))}
-.app{--lb:max(220px,min(calc((100dvh - 60px)*var(--board-scale)),calc(100vw - 386px),calc(880px*var(--board-scale))));max-width:none;align-items:start;column-gap:10px;
+.app{--lb:max(220px,min(calc((100dvh - 32px - var(--bagx))*var(--board-scale)),calc(100vw - 386px),calc(880px*var(--board-scale))));max-width:none;align-items:start;column-gap:10px;
 grid-template-columns:minmax(0,1fr) var(--lb);grid-template-areas:"head board" "side board" "hist board"}
 .boardWrap{grid-area:board;position:sticky;top:max(8px,env(safe-area-inset-top))}
 .board{width:var(--lb);max-width:none}
@@ -195,7 +209,7 @@ grid-template-columns:minmax(0,1fr) var(--lb);grid-template-areas:"head board" "
 @media(orientation:landscape) and (max-height:559px) and (min-width:720px){
 body{padding-top:max(4px,env(safe-area-inset-top));padding-bottom:max(4px,env(safe-area-inset-bottom))}
 .app{--sw:clamp(212px,27vw,300px);--hw:calc(clamp(150px,22vw,260px)*var(--hist-w));justify-content:center;
---lb:max(220px,min(calc((100dvh - 30px - max(0px,env(safe-area-inset-top) - 4px) - max(0px,env(safe-area-inset-bottom) - 4px))*var(--board-scale)),calc(100vw - 20px - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)) - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
+--lb:max(220px,min(calc((100dvh - 9px - var(--bagxl) - max(0px,env(safe-area-inset-top) - 4px) - max(0px,env(safe-area-inset-bottom) - 4px))*var(--board-scale)),calc(100vw - 20px - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)) - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
 grid-template-columns:minmax(0,var(--sw)) var(--lb) minmax(0,var(--hw));grid-template-rows:auto minmax(0,1fr);
 grid-template-areas:"side board head" "side board hist"}
 .boardWrap{top:max(4px,env(safe-area-inset-top))}
@@ -277,7 +291,7 @@ html[data-layout="duel"]:not([data-hist="drawer"]) .hist{grid-area:hist;height:m
 /* Any landscape screen at least 700x560: panels | board | panels. --ov is the real vertical overhead (padding, message bar, bag row, two button rows,
    gaps), so board + overhead always equals the viewport height and the page never needs scrolling; width is the other limit. */
 @media(orientation:landscape) and (min-width:700px) and (min-height:560px){
-html[data-layout="duel"] .app{--ov:calc(116px + 2*46px*var(--btn-scale) + var(--btn-gap));
+html[data-layout="duel"] .app{--ov:calc(88px + var(--bagx) + 2*46px*var(--btn-scale) + var(--btn-gap));
 --bs:max(260px,min(calc((100dvh - var(--ov))*var(--board-scale)),calc(100vw - 460px),calc(880px*var(--board-scale))));
 grid-template-columns:minmax(0,1fr) var(--bs) minmax(0,1fr);
 grid-template-areas:". toast ." "p2 board p1" "p2 ctrls p1" "hist hist hist"}
@@ -310,7 +324,7 @@ html[data-bstyle="iconlabel"] .ctrls .btn{flex-direction:column;gap:2px;line-hei
 html[data-bstyle="iconlabel"] .ctrls .lbl{font-size:.68em;font-weight:600}
 html[data-bstyle="iconlabel"] .ctrls .ic{width:1.35em;height:1.35em}
 @media(orientation:landscape) and (min-width:700px) and (min-height:560px){
-html[data-layout="duel"][data-bstyle="icon"] .app{--ov:calc(116px + 46px*var(--btn-scale) + var(--btn-gap))}
+html[data-layout="duel"][data-bstyle="icon"] .app{--ov:calc(88px + var(--bagx) + 46px*var(--btn-scale) + var(--btn-gap))}
 }
 /* Floating windows (js/float.js): settings + word-log drawer share one look and one behaviour */
 #ad{position:fixed;inset:auto;margin:0;max-width:calc(100vw - 16px);max-height:min(72dvh,calc(100dvh - 16px));box-shadow:0 12px 40px #000c}
