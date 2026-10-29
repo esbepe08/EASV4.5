@@ -142,11 +142,15 @@ const store = (p, k) => p.evaluate(k => localStorage.getItem(k), k);
   for (const [n, vp] of [['desktop', DESK], ['phone', PHONE]]) {
     const { page } = await openGame(b, vp, { storage: ON }); await sleep(300);
     const f = await page.evaluate(() => { const w = document.querySelector('.boardWrap'), c = getComputedStyle(w), k = getComputedStyle(document.querySelector('.ctrls')); const bd = document.querySelector('#board').getBoundingClientRect(), r = w.getBoundingClientRect();
-      return { fl: document.documentElement.dataset.floating, bg: c.backgroundColor, img: c.backgroundImage, sh: c.boxShadow, bf: c.backdropFilter, ctrlsBg: k.backgroundColor, handle: !!w.querySelector('.flMove'), grip: !!w.querySelector('.flGrip'), pad: [bd.top - r.top, r.bottom - bd.bottom] }; });
+      const mv = w.querySelector('.flMove').getBoundingClientRect(), gr = w.querySelector('.flGrip').getBoundingClientRect(), sq = document.querySelector('#board .sq').getBoundingClientRect(), sq2 = [...document.querySelectorAll('#board .sq')].pop().getBoundingClientRect();
+      return { fl: document.documentElement.dataset.floating, bg: c.backgroundColor, img: c.backgroundImage, sh: c.boxShadow, bf: c.backdropFilter, ctrlsBg: k.backgroundColor,
+        pad: [bd.top - r.top, r.bottom - bd.bottom, bd.left - r.left, r.right - bd.right], stripOverSquare: mv.bottom - sq.top, gripOverSquare: Math.max(0, sq2.right - gr.left) * Math.max(0, sq2.bottom - gr.top), stripH: mv.height, gripOut: gr.right - r.right }; });
     ok(f.fl === 'true', n + ': workspace is on');
     ok(/rgba\(0, 0, 0, 0\)|transparent/.test(f.bg) && f.img === 'none' && f.sh === 'none' && (f.bf === 'none' || f.bf === ''), `${n}: no panel, shadow or blur behind the board (${f.bg} / ${f.sh})`);
+    ok(f.pad.every(v => Math.abs(v) < 0.6), `${n}: the module is exactly the board, no padding around it (${f.pad.map(v => v.toFixed(1))})`);
     ok(!/rgba\(0, 0, 0, 0\)/.test(f.ctrlsBg), n + ': the control bar keeps its panel');
-    ok(f.handle && f.grip && f.pad[0] >= 20, n + ': drag strip and resize corner are still there');
+    ok(f.stripH > 12 && f.stripH < 24 && f.stripOverSquare <= 0.5, `${n}: drag strip is the board's rim and never covers a square (${f.stripH.toFixed(1)}px, over square ${f.stripOverSquare.toFixed(1)})`);
+    ok(f.gripOverSquare < 1 && f.gripOut > 8, `${n}: resize grip sits on the outer corner, clear of the corner square`);
     await closeGame(page);
   }
 }

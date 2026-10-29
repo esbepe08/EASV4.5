@@ -156,8 +156,9 @@ function defaults(o) {
     // A panel is sized from the board: seven rack tiles about one board cell wide (+ padding). Small boards keep the 300px floor of the original layout.
     const pMax = limits(T.p0).maxW, pCap = Math.min(pMax, Math.max(300, Math.round(0.58 * s + 24)));
     const colW = clamp((a.w - s) / 2 - M, 168, pCap), pw = clamp(colW, 160, pCap);
-    if ((a.w - s) / 2 - M > pCap + 2 * M + 80) {
-      // Wide profile (shape decides, not a resolution): free space beside the board exceeds what two panels need, so the row becomes Board | Controls | Players
+    if (a.w - s > Math.min(Math.round(0.32 * s), 360) + pCap + 4 * M + 80) {
+      // Wide profile (shape decides, not a resolution): the free width beside the board holds a controls column plus a panel column, so the row becomes Board | Controls | Players.
+      // (It used to ask for two whole panel columns, one each side; with the board now exactly the board, with no frame around it, that test flipped on ultrawide screens that had always been wide.)
       const cw = clamp(Math.round(0.32 * s), 168, Math.min(limits(T.ctrls).maxW, 360)), hp = measure(T[left], pw), hq = measure(T[right], pw), hc = measure(T.ctrls, cw), ht = measure(T.tools, cw);
       const total = s + M + cw + M + pw, x0 = Math.max(a.x0, a.x0 + (a.w - total) / 2), bh = s + extra, stackH = hp + M + hq;
       const yP = clamp(a.y0 + (bh - stackH) / 2, a.y0, Math.max(a.y0, a.y1 - stackH));

@@ -34,13 +34,16 @@ html[data-floating="true"] body #tools{z-index:32}
 html[data-floating="true"][data-hist="drawer"] body .hist{z-index:40}
 html[data-floating="true"] body :is(.boardWrap,.ctrls){border-radius:14px;box-shadow:inset 0 0 0 1px var(--panel-line),0 8px 24px #0007;
 background:var(--panel-bg);background:color-mix(in srgb,var(--panel-bg) 78%,transparent);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
-/* The board module has no frame: no panel, border, shadow or blur behind the board, so nothing competes with it. Its drag strip (top) and resize corner (bottom) stay exactly where they were,
-   just unpainted; the grip glyph in the corner is the visible cue, and the outline below shows the module being moved or focused. The control bar keeps its panel. */
+/* The board module IS the board: no padding, panel, border, shadow or blur around it, so what you move and resize is the board itself and nothing else.
+   The drag strip is the board's own wooden rim (3px border + 1.2% padding), so it never covers a square; its strip itself reaches 8px outside the board for an easier grab, never inside.
+   The resize grip sits on the outer corner, half outside, so it never covers the corner square. The control bar keeps its panel. */
 html[data-floating="true"] body .boardWrap{background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+html[data-floating="true"] body .boardWrap .flMove{top:-8px;height:calc(8px + 3px + var(--float-board-size,min(92vw,480px))*.012);border-radius:0}
+html[data-floating="true"] body .boardWrap .flGrip{right:-14px;bottom:-14px;border-radius:0}
 html[data-floating="true"] body .flActive{outline:2px solid var(--accent);outline-offset:0}
 
 /* board: real width, never a transform; the board inside stays 1:1 and every cell, tile and glyph scales with it (cqw units) */
-html[data-floating="true"] body .boardWrap{display:block;position:fixed;width:var(--float-board-size,min(92vw,480px));padding:22px 0 14px}
+html[data-floating="true"] body .boardWrap{display:block;position:fixed;width:var(--float-board-size,min(92vw,480px));padding:0}   /* the module is the board itself: see the rim handle below */
 html[data-floating="true"] body .board{width:100%;max-width:none}
 
 /* players: width is the only free dimension; the rack fills the panel width and its slots stay square */
