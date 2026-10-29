@@ -293,3 +293,10 @@ npm test          # all suites; or: node run-all.mjs "extra.mjs b" to run one
 ## Credits
 
 By esbepe. Evolved from [DAXEI08/update-version](https://github.com/DAXEI08/update-version).
+
+## Floating Workspace: no size limits
+In Floating Workspace every module (board, both player panels, Turn Controls, Game Tools, word log) has **no maximum size** and only a tiny floor (it can never collapse to nothing).
+- Drag a module's corner grip, use the arrow keys / `+` `−` on it, or hold **Ctrl/⌘ and scroll** (or pinch on a trackpad) over it to resize around the pointer.
+- Content is proportional: type, padding, buttons and tiles scale with the module (`--fu`, see `js/float.js` `setUnit` and `css/float.css`). Untouched layouts look exactly as before.
+- A module larger than the screen can be panned by its strip until any edge (and its grips) is on screen; double-click the strip or grip to restore the default.
+- Saved sizes keep their proportions on other window sizes. Classic/Duel layouts and the gameplay dialogue keep their original limits.
