@@ -1,8 +1,10 @@
 // Tahkim (judging): the challenger (player now on turn) rules the last move صحيح (valid) or خطأ (wrong).
-import { PENALTY, NAMES } from './config.js';
+import { PENALTY } from './config.js';
 import { $, S, app, cur, restore } from './state.js';
 import { toast, render, chips } from './ui.js';
+import { nameHtml, nameIso } from './names.js';
 import { tick, nextTurn } from './game.js';
+import { clearFlash } from './flash.js';
 
 export function openJudge() {
   const e = S.hist[S.hist.length - 1];
@@ -17,7 +19,7 @@ export function abortJudge() {
 function renderJudge() {
   const e = app.judge.e;
   $('#jT').textContent = 'تحكيم الحركة';
-  $('#jB').innerHTML = `<p>${NAMES[e.p]} · الحركة ${e.n} · ${e.total} نقطة</p>${chips(e)}<p>ما حكم الكلمة؟</p>`
+  $('#jB').innerHTML = `<p>${nameHtml(e.p)} · الحركة ${e.n} · ${e.total} نقطة</p>${chips(e)}<p>ما حكم الكلمة؟</p>`
     + '<div class="vrow"><button class="btn yes" data-a="yes">✔ صحيح</button><button class="btn danger" data-a="no">✖ خطأ</button></div>'
     + '<button class="btn" data-a="close">إلغاء</button>';
 }
@@ -33,9 +35,10 @@ function applyVerdict(ok) {
   app.judge = null; $('#jd').close(); S.paused = false; S.last = performance.now(); S.hv++;
   if (ok) {
     const ch = cur(); e.pen = Math.min(PENALTY, ch.score); ch.score -= e.pen; S.undo = null; S.pop = S.cur;
-    toast(`✔ صحيح — غرامة ${e.pen} على ${NAMES[S.cur]}`, false); return render();
+    toast(`✔ صحيح — غرامة ${e.pen} على ${nameIso(S.cur)}`, false); return render();
   }
   tick(); if (S.ended) return;
+  clearFlash();   // the ruled-out move is taken off the board: its words stop lighting up
   restore(u, true);
-  toast(`✖ خطأ — يفقد ${NAMES[e.p]} دوره`, false); nextTurn();
+  toast(`✖ خطأ — يفقد ${nameIso(e.p)} دوره`, false); nextTurn();
 }

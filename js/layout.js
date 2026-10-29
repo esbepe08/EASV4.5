@@ -5,6 +5,8 @@
 //   data-pdock="top|middle|bottom"  duel only: vertical position of the player panels beside the board
 //   data-bstyle="icon|iconlabel|text"  control buttons: icons only (label stays for screen readers + tooltip), icon over label, or the original text
 //   data-hist="drawer|docked"    drawer = word log hidden until asked for (default); docked = always in the layout (old behaviour)
+//   data-binfo="off|on"          the info bar under the board (mode · bag count): hidden by default so the board gets the room (the count lives on the swap button,
+//                               in the word log and in the endgame toasts; the bar stays in the page for screen readers); on = the bar is shown again
 //   data-floating="true"        optional Floating Workspace (js/float.js, css/float.css): a presentation layer that lets the board, player panels,
 //                               controls and word log be moved and resized. Default OFF; absent = this file's layout is authoritative.
 import { $ } from './state.js';
@@ -12,13 +14,14 @@ import { applyHistMode } from './histview.js';
 import { makeFloating, resetFloats, gameInert, autoPos, isFloating, setFloating, refresh } from './float.js';
 
 const KEY = 'scrabble.layout';
-const DEF = { layout: 'classic', p1: 'left', pdock: 'bottom', bstyle: 'icon', hist: 'drawer' };
+const DEF = { layout: 'classic', p1: 'left', pdock: 'bottom', bstyle: 'icon', hist: 'drawer', binfo: 'off' };
 const ROWS = [
   ['layout', 'التخطيط', [['classic', 'كلاسيكي'], ['duel', 'مواجهة']]],
   ['p1', 'موضع اللاعب الأول', [['left', 'يسار'], ['right', 'يمين']]],
   ['pdock', 'ارتفاع لوحات اللاعبين', [['top', 'أعلى'], ['middle', 'وسط'], ['bottom', 'أسفل']]],
   ['bstyle', 'أزرار التحكم', [['icon', 'أيقونات'], ['iconlabel', 'أيقونة + نص'], ['text', 'نص فقط']]],
   ['hist', 'سجل الكلمات', [['drawer', 'عائم عند الطلب'], ['docked', 'مثبّت']]],
+  ['binfo', 'شريط معلومات اللوح', [['off', 'مخفي'], ['on', 'ظاهر']]],
   ['float', 'الوضع العائم', [['off', 'إيقاف'], ['on', 'تشغيل']]]   // not part of `pref`: on/off lives with the workspace geometry (float.js)
 ];
 const ok = (k, v) => ROWS.find(r => r[0] === k)[2].some(o => o[0] === v);
@@ -33,6 +36,7 @@ function apply() {
   d.pdock = pref.pdock;
   d.bstyle = pref.bstyle;
   d.hist = pref.hist;
+  d.binfo = pref.binfo;
   applyHistMode(pref.hist);
   refresh();   // Floating Workspace ON: modules without a saved override follow the new defaults
 }
@@ -45,8 +49,8 @@ function build() {
 }
 
 // Tooltip = current label (the labels change at runtime, e.g. swap mode), so icon-only buttons are never anonymous.
-function syncTitles() {
-  document.querySelectorAll('.ctrls .btn').forEach(b => { const t = b.querySelector('.lbl')?.textContent; if (t && b.title !== t) b.title = t; });
+function syncTitles() {   // a button may carry a short note (the swap button: the bag count) in data-sub
+  document.querySelectorAll('.ctrls .btn').forEach(b => { const l = b.querySelector('.lbl')?.textContent, t = l && (b.dataset.sub ? `${l} · ${b.dataset.sub}` : l); if (t && b.title !== t) b.title = t; });
 }
 
 export function initLayout() {

@@ -10,18 +10,24 @@ import { showCover } from './cover.js';
 import { initLayout } from './layout.js';
 import { initWorkspace } from './float.js';
 import { initFullscreen } from './fullscreen.js';
+import { loadNames } from './names.js';
+import { initNameEdit } from './nameedit.js';
+import { initHaptics } from './haptics.js';
 import { loadSaved, initPersistence, startFlow, schedule } from './persist.js';
 import { initPwa } from './pwa.js';
 
 function start() {
   const saved = loadSaved();   // an unfinished match from a previous visit, validated; read before anything can overwrite it
   initThemes();
+  loadNames();   // before buildDom: the panels are drawn with the saved names
   initHistoryToggle();
   initLayout();
   buildDom();
   initFullscreen();
   initWorkspace();   // needs the player panels that buildDom just created; a saved "Floating Workspace: ON" is restored here
   initInput();
+  initNameEdit();
+  initHaptics();
   setInterval(tick, TICK_MS);
   newGame();
   S.paused = true;       // clock stays frozen until the setup flow finishes

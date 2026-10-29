@@ -34,43 +34,56 @@ html[data-floating="true"] body #tools{z-index:32}
 html[data-floating="true"][data-hist="drawer"] body .hist{z-index:40}
 html[data-floating="true"] body :is(.boardWrap,.ctrls){border-radius:14px;box-shadow:inset 0 0 0 1px var(--panel-line),0 8px 24px #0007;
 background:var(--panel-bg);background:color-mix(in srgb,var(--panel-bg) 78%,transparent);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+/* The board module IS the board: no padding, panel, border, shadow or blur around it, so what you move and resize is the board itself and nothing else.
+   The drag strip is the board's own wooden rim (3px border + 1.2% padding), so it never covers a square; its strip itself reaches 8px outside the board for an easier grab, never inside.
+   The resize grip sits on the outer corner, half outside, so it never covers the corner square. The control bar keeps its panel. */
+html[data-floating="true"] body .boardWrap{background:none;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+html[data-floating="true"] body .boardWrap .flMove{top:-8px;height:calc(8px + 3px + var(--float-board-size,min(92vw,480px))*.012);border-radius:0}
+html[data-floating="true"] body .boardWrap .flGrip{right:-14px;bottom:-14px;border-radius:0}
 html[data-floating="true"] body .flActive{outline:2px solid var(--accent);outline-offset:0}
 
 /* board: real width, never a transform; the board inside stays 1:1 and every cell, tile and glyph scales with it (cqw units) */
-html[data-floating="true"] body .boardWrap{display:block;position:fixed;width:var(--float-board-size,min(92vw,480px));padding:22px 0 14px}
+html[data-floating="true"] body .boardWrap{display:block;position:fixed;width:var(--float-board-size,min(92vw,480px));padding:0}   /* the module is the board itself: see the rim handle below */
 html[data-floating="true"] body .board{width:100%;max-width:none}
 
 /* players: width is the only free dimension; the rack fills the panel width and its slots stay square */
-html[data-floating="true"] body .panel{padding-top:24px;padding-bottom:14px;border-color:var(--panel-line)}
+html[data-floating="true"] body .panel{border-color:var(--panel-line)}   /* padding: see the proportional block below */
 html[data-floating="true"] body .panel.on{border-color:var(--accent)}
 html[data-floating="true"] body .rack{width:100%;max-width:none}
 
 /* controls: one palette; the buttons reflow with its width and keep their own size */
-html[data-floating="true"] body .ctrls{padding:24px 8px 16px;grid-template-columns:repeat(auto-fit,minmax(calc(84px*var(--btn-scale)),1fr))}
-html[data-floating="true"][data-bstyle="icon"] body .ctrls{grid-template-columns:repeat(auto-fit,minmax(calc(40px*var(--btn-scale)),1fr))}
-html[data-floating="true"][data-bstyle="iconlabel"] body .ctrls{grid-template-columns:repeat(auto-fit,minmax(calc(64px*var(--btn-scale)),1fr))}
+/* controls: one palette; the buttons reflow with its width and scale with it (proportional block below) */
 
-/* ---- fluid content: every module answers to its OWN width (container queries), not to the screen ----
-   Below each threshold the stable base sizes of style.css apply untouched; above it type, gaps and button height grow with the module, with a ceiling.
-   The rack already derives tile, glyph and score size from its own width (cqw), so a wider panel means bigger tiles; the panel's resize ceiling (js/float.js) bounds them. */
-html[data-floating="true"] body .ctrls{container-type:inline-size}
-@container (min-width:300px){
-  html[data-floating="true"] body .pname{font-size:clamp(1.1rem,4.4cqw,1.9rem)}
-  html[data-floating="true"] body .pscore{font-size:clamp(1.3rem,5.2cqw,2.2rem)}
-  html[data-floating="true"] body .ptime{font-size:clamp(1.15rem,4.6cqw,1.9rem)}
-  html[data-floating="true"] body .phead{gap:0 clamp(10px,2.6cqw,20px);margin-bottom:clamp(6px,1.8cqw,14px)}
-  html[data-floating="true"] body .rack{gap:clamp(5.28px,1.2cqw,12px);padding:clamp(7.92px,1.8cqw,18px)}
-}
-@container (min-width:420px){
-  html[data-floating="true"] body .ctrls .btn{min-height:clamp(calc(46px*var(--btn-scale)),5.2cqw,calc(76px*var(--btn-scale)));font-size:clamp(calc(1rem*var(--btn-scale)),2.5cqw,calc(1.5rem*var(--btn-scale)));border-radius:clamp(8px,1.6cqw,14px)}
-}
+/* ---- proportional content: NO MAXIMUM SIZE, ANY SIZE STAYS PROPORTIONATE ----
+   js/float.js gives every player panel, Turn Controls and Game Tools a unit --fu from the module's own width (1 = the original sizes; above a reference width it grows in
+   step with the module, below a floor width it shrinks in step; in between nothing changes). Type, padding, gaps, strips, grips and buttons are the original value times
+   --fu, so there are no clamps and no ceilings: make a module twice as wide and everything in it is twice as big. The rack and the board already scale from their own width
+   (cqw). The --f-*, --b-* and --p-* tokens carry the compact-landscape values style.css uses, so those screens keep their original sizes at --fu: 1. */
+html[data-floating="true"] body{--f-name:1.1rem;--f-time:1.15rem;--f-score:1.3rem;--p-x:10px;--p-mb:6px;--b-h:46px;--b-fs:1rem;--b-r:8px;--b-py:4px;--b-px:6px}
+@media(max-width:420px){html[data-floating="true"] body{--b-h:44px}}
+@media(orientation:landscape) and (max-width:999px),(orientation:landscape) and (max-height:559px){html[data-floating="true"] body{--b-h:40px}}
+@media(orientation:landscape) and (max-height:559px){html[data-floating="true"] body{--f-name:.95rem;--f-time:1rem;--f-score:1.1rem;--p-x:8px;--p-mb:3px;--b-h:34px;--b-fs:.8rem;--b-r:7px;--b-py:2px;--b-px:3px}}
+html[data-floating="true"] body :is(.panel,.ctrls){--u:var(--fu,1)}
+html[data-floating="true"] body .panel{padding:calc(24px*var(--u)) calc(var(--p-x)*var(--u)) calc(14px*var(--u))}
+html[data-floating="true"] body .pname{font-size:calc(var(--f-name)*var(--u,1))}
+html[data-floating="true"] body .pscore{font-size:calc(var(--f-score)*var(--u,1))}
+html[data-floating="true"] body .ptime{font-size:calc(var(--f-time)*var(--u,1))}
+html[data-floating="true"] body .phead{gap:0 calc(10px*var(--u,1));margin-bottom:calc(var(--p-mb)*var(--u,1))}
+html[data-floating="true"] body .rack{gap:1.2cqw;padding:1.8cqw}
+html[data-floating="true"] body .ctrls{padding:calc(24px*var(--u)) calc(8px*var(--u)) calc(16px*var(--u));gap:calc(var(--btn-gap)*var(--u));grid-template-columns:repeat(auto-fit,minmax(calc(84px*var(--btn-scale)*var(--u)),1fr))}
+html[data-floating="true"][data-bstyle="icon"] body .ctrls{grid-template-columns:repeat(auto-fit,minmax(calc(40px*var(--btn-scale)*var(--u)),1fr))}
+html[data-floating="true"][data-bstyle="iconlabel"] body .ctrls{grid-template-columns:repeat(auto-fit,minmax(calc(64px*var(--btn-scale)*var(--u)),1fr))}
+html[data-floating="true"] body .ctrls .btn{min-height:calc(var(--b-h)*var(--btn-scale)*var(--u));font-size:calc(var(--b-fs)*var(--btn-scale)*var(--u));border-radius:calc(var(--b-r)*var(--u));padding:calc(var(--b-py)*var(--u)) calc(var(--b-px)*var(--u))}
+html[data-floating="true"] body :is(.panel,.ctrls) .flMove{height:calc(22px*max(.8,var(--u)))}
+html[data-floating="true"] body :is(.panel,.ctrls,.hist) .flGrip{width:calc(24px*max(.8,var(--fu,1)));height:calc(24px*max(.8,var(--fu,1)))}
+html[data-floating="true"] body :is(.panel,.ctrls) .flGrip svg{width:calc(14px*max(.8,var(--u)));height:calc(14px*max(.8,var(--u)))}
 
 /* ---- Game Tools: minimize / restore ----
    Expanded: a small collapse button in the corner of the move strip. Minimized: the module's whole footprint becomes one 48px button (the same element is
    its drag handle), every tool button is out of the layout, and the resize grip and move strip are gone, so it really takes only that much of the screen. */
 /* Game Tools floats above other modules (a phone opens it over the racks), so it gets a near-opaque, theme-coloured backdrop: what is behind it must not show through the buttons. */
 html[data-floating="true"] body #tools{background:color-mix(in srgb,var(--bg-page-2) 96%,transparent);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-html[data-floating="true"] body #toolsToggle{position:absolute;inset-block-start:1px;inset-inline-end:3px;z-index:5;width:20px;height:20px;margin:0;padding:0;display:grid;place-items:center;border:1px solid var(--btn-line);border-radius:50%;
+html[data-floating="true"] body #toolsToggle{position:absolute;inset-block-start:1px;inset-inline-end:3px;z-index:5;width:calc(20px*max(.8,var(--u,1)));height:calc(20px*max(.8,var(--u,1)));margin:0;padding:0;display:grid;place-items:center;border:1px solid var(--btn-line);border-radius:50%;
   background:linear-gradient(var(--btn-1),var(--btn-2));color:var(--btn-text);cursor:pointer;opacity:.85}
 html[data-floating="true"] body #toolsToggle:hover,html[data-floating="true"] body #toolsToggle:focus-visible{opacity:1}
 html[data-floating="true"] body #toolsToggle:focus-visible{outline:3px solid var(--focus);outline-offset:1px}

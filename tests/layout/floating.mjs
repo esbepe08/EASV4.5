@@ -101,12 +101,19 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   await p.evaluate(async () => { const { cancelMove } = await import('/js/game.js'); const { render } = await import('/js/ui.js'); cancelMove(); render(); });
   await drag(p, '.boardWrap .flGrip', 2000, 2000);
   const big = await rect(p, '.boardWrap');
-  ok(await inView(p, ['.boardWrap']) === '', 'resize beyond the screen is clamped');
+  ok(big.w > Math.min(vp.width, vp.height) + 40, `no maximum: the board can be made larger than the screen (${big.w})`);
+  ok(big.w >= Math.max(vp.width, vp.height) * 1.3, 'the board really follows a drag far past the screen edge');
+  { const m = await rect(p, '.boardWrap .flMove'); const x = Math.max(m.x, 0) + 24, y = m.y + 5; await p.mouse.move(x, y); await p.mouse.down(); await p.mouse.move(x - 2000, y - 2000, { steps: 6 }); await p.mouse.move(x - 4000, y - 4000, { steps: 6 }); await p.mouse.up(); await settle(p); }   // grab the visible part of the strip; pan: an oversized module can be brought flush to its far corner, so its grip is reachable
+  const pan = await rect(p, '.boardWrap .flGrip');
+  ok(pan.x < vp.width && pan.y < vp.height && pan.x + pan.w > 0 && pan.y + pan.h > 0, 'oversized board can be panned until its resize grip is on screen');
+  await p.evaluate(() => document.querySelector('.boardWrap .flMove').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))); await settle(p);   // double-click the strip: back to the default
+  ok(await inView(p, ['.boardWrap']) === '', 'double-clicking the strip restores the default board');
+  await drag(p, '.boardWrap .flGrip', -12, -12);   // the reset cleared the saved geometry: size it once more so the persistence checks below have a record
   // 12-13 player module move + resize (width only, rack square)
   const p0 = await rect(p, '#pn0'); await drag(p, '#pn0 .flMove', 25, -20);
   const p0b = await rect(p, '#pn0'); ok(Math.abs(p0b.x - p0.x) + Math.abs(p0b.y - p0.y) > 3, 'player panel moved');
   await drag(p, '#pn0 .flGrip', -60, 0);
-  const p0c = await rect(p, '#pn0'); ok(p0c.w >= 160 && p0c.w < p0b.w, 'player panel resized, min width respected');
+  const p0c = await rect(p, '#pn0'); ok(p0c.w >= 96 && p0c.w < p0b.w, "player panel resized, small floor respected");
   ok(await p.evaluate(() => { const s = [...document.querySelectorAll('#rk0 .slot')].map(x => x.getBoundingClientRect()); return s.every(r => Math.abs(r.width - r.height) < 0.6 && r.width > 8); }), 'rack slots stay square');
   ok(await p.evaluate(() => { const pn = document.querySelector('#pn0').getBoundingClientRect(), rk = document.querySelector('#rk0').getBoundingClientRect(); return rk.right <= pn.right + 0.5 && rk.left >= pn.left - 0.5; }), 'rack inside its panel');
   // 14-15 controls move + resize as one palette
@@ -157,7 +164,9 @@ for (const name of ['desktop 1366x768', 'portrait-phone 390x844', 'landscape-pho
   ok(await p.evaluate(async () => (await import('/js/state.js')).S.paused === true), 'clock paused behind dialogue');
   const dl = await rect(p, '#dlg'), bwr = await rect(p, '#board');
   const ov = Math.max(0, Math.min(dl.x + dl.w, bwr.x + bwr.w) - Math.max(dl.x, bwr.x)) * Math.max(0, Math.min(dl.y + dl.h, bwr.y + bwr.h) - Math.max(dl.y, bwr.y));
-  ok(ov < 0.45 * dl.w * dl.h, `dialogue avoids most of the board (overlap ${(ov / (dl.w * dl.h) * 100) | 0}%)`);
+  // 0.65 (was 0.45): the board now also uses the room of the hidden info bar (~28px) and of the old frame around the floating board module (36px), so on the shortest landscape phone
+  // (844x390) there is simply less free space for the dialogue (overlap 43% -> 59%). It stays movable, and nothing else on screen is covered more than before.
+  ok(ov < 0.65 * dl.w * dl.h, `dialogue avoids most of the board (overlap ${(ov / (dl.w * dl.h) * 100) | 0}%)`);
   await p.keyboard.press('Escape'); await settle(p);
   ok(await p.evaluate(() => !document.querySelector('#dlg').open && ![...document.querySelectorAll('.app > *')].some(n => n.inert)), 'Escape closes it and unlocks the game');
   ok(await state(p) === sBefore, 'cancelling leaves the game untouched');

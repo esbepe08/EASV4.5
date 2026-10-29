@@ -10,7 +10,7 @@
 // Storage: scrabble.float (popup positions, unchanged format) and scrabble.floatWorkspace.v2 (on/off + per-orientation geometry). Every saved module
 // also remembers the area (aw, ah) and its own height (bh) it was saved in, so a different viewport maps the layout proportionally (see applyGeom).
 // Pure UI: no game state is read or written here.
-import { NAMES } from './config.js';
+import { nameOf, onNamesChange } from './names.js';
 
 const LEGACY = 'scrabble.float', WSKEY = 'scrabble.floatWorkspace.v2', M = 8;
 const ORI = ['portrait', 'landscape'];
@@ -55,14 +55,21 @@ function area() {
   return a;
 }
 const orient = () => innerWidth > innerHeight ? 'landscape' : 'portrait';
-const fit = (x, y, w, h) => { const a = area(); return [clamp(x, a.x0, a.x1 - w), clamp(y, a.y0, a.y1 - h)]; };
+// Popups are kept inside the screen. Workspace modules (loose = true) may be ANY size: one that fits stays fully inside, one that is larger than the screen can be panned
+// so that every edge, and with it every handle, can be brought into view (the pan range flips: [right edge flush .. left edge flush]). e = room for hanging chrome.
+const fit = (x, y, w, h, loose = false, e = 0) => {
+  const a = area();
+  if (!loose) return [clamp(x, a.x0, a.x1 - w), clamp(y, a.y0, a.y1 - h)];
+  const rx = [a.x1 - w - e, a.x0], ry = [a.y1 - h - e, a.y0];
+  return [clamp(x, Math.min(...rx), Math.max(...rx)), clamp(y, Math.min(...ry), Math.max(...ry))];
+};
 
 // ---------- module table ----------
 // axes: 's' = square (board, 1:1), 'x' = width only (height follows the content, so racks and buttons are never stretched), 'xy' = both
 const DEFS = {
   board: { sel: '.boardWrap', axes: 's', label: 'اللوح' },
-  p0: { sel: '#pn0', axes: 'x', label: NAMES[0] },
-  p1: { sel: '#pn1', axes: 'x', label: NAMES[1] },
+  p0: { sel: '#pn0', axes: 'x', get label() { return nameOf(0); } },   // the players' labels follow their names (see relabel)
+  p1: { sel: '#pn1', axes: 'x', get label() { return nameOf(1); } },
   ctrls: { sel: '.ctrls', axes: 'x', label: 'أزرار الدور' },          // Turn Controls
   tools: { sel: '#tools', axes: 'x', label: 'أدوات اللعبة' },        // Game Tools
   hist: { axes: 'xy', label: 'سجل الكلمات' },
@@ -89,33 +96,40 @@ export function raise(t) {
   order[k].forEach((x, i) => { x.el.style.zIndex = BASE[k] + i; });   // ranks inside a band: bounded, never an ever-growing counter
 }
 
-// Resize ranges come from the live CSS viewport (never from a device list): a usability floor that keeps small screens exactly as they were, a share of the
-// available width that lets large and ultrawide screens grow, and a generous ceiling so nothing becomes absurd. devicePixelRatio plays no part.
-const FLUID = { player: { floor: 520, frac: .36, ceil: 900 }, ctrls: { floor: 640, frac: .4, ceil: 1000 }, tools: { floor: 480, frac: .3, ceil: 800 }, hist: { floor: 560, frac: .3, ceil: 900 }, board: { ceil: 1600 } };
-const fluidMax = (a, k) => Math.min(a.w, k.ceil, Math.max(k.floor, k.frac * a.w));
+// FLOATING WORKSPACE HAS NO MAXIMUM SIZE. Every module can be made as large as the player wants (HUGE only guards the browser's own layout limits); the sole floor is a size
+// at which the module is still a visible, grabbable thing. Content scales with the module (see setUnit and css/float.css), so any size stays proportionate.
+// The gameplay dialogue is a popup in every mode, not a workspace module, and keeps its original range.
+const HUGE = 20000, GRIP_EDGE = 3;   // GRIP_EDGE: the board's grip glyph reaches 3px past the area margin when the board is flush with the corner
 function limits(t) {
   const a = area(), id = t.id;
   if (id === 'board') {
     const b = t.el.querySelector('.board'), extra = Math.max(0, t.el.offsetHeight - (b ? b.offsetHeight : 0));
-    const maxW = Math.max(120, Math.min(a.w, a.h - extra, FLUID.board.ceil));   // on a tiny window the board may drop below its usual minimum rather than leave the screen
-    return { minW: Math.min(240, maxW), maxW, extra };
+    return { minW: 64, maxW: HUGE, extra };
   }
-  if (id === 'hist') return { minW: 200, maxW: fluidMax(a, FLUID.hist), minH: 160, maxH: a.h };
-  if (id === 'ctrls') return { minW: 144, maxW: fluidMax(a, FLUID.ctrls) };
-  if (id === 'tools') return { minW: 112, maxW: fluidMax(a, FLUID.tools) };
+  if (id === 'hist') return { minW: 140, maxW: HUGE, minH: 90, maxH: HUGE };
+  if (id === 'ctrls') return { minW: 72, maxW: HUGE };
+  if (id === 'tools') return { minW: 56, maxW: HUGE };
   if (id === 'dlg') return { minW: 260, maxW: Math.min(a.w, 560) };
-  return { minW: 160, maxW: fluidMax(a, FLUID.player) };   // player panels
+  return { minW: 96, maxW: HUGE };   // player panels
+}
+// Proportional content: each module publishes --fu (its "float unit") from its own width; css/float.css multiplies type, padding, gaps and buttons by it.
+// 1 = the original sizes. Above the reference width everything grows in step with the module; below the floor width everything shrinks in step, in between nothing
+// changes, so a layout the player never touches looks exactly as before.
+const UNIT = { p0: [160, 400], p1: [160, 400], ctrls: [100, 360], tools: [100, 360] };
+function setUnit(t, w) {
+  const u = UNIT[t.id]; if (!u || !inWs(t)) return;
+  t.el.style.setProperty('--fu', (w < u[0] ? w / u[0] : w < u[1] ? 1 : w / u[1]).toFixed(3));
 }
 
 // ---------- applying geometry ----------
 function setSize(t, w, h) {
   const L = limits(t), el = t.el;
   if (t.def.axes === 's') { el.style.setProperty('--float-board-size', clamp(w, L.minW, L.maxW) + 'px'); return; }
-  el.style.width = clamp(w, L.minW, L.maxW) + 'px';
+  const cw = clamp(w, L.minW, L.maxW); el.style.width = cw + 'px'; setUnit(t, cw);
   if (t.def.axes === 'xy' && h != null) el.style.height = clamp(h, L.minH, L.maxH) + 'px';
 }
 function setPos(t, x, y) {
-  const r = t.el.getBoundingClientRect(), [px, py] = fit(x, y, r.width, r.height);
+  const r = t.el.getBoundingClientRect(), [px, py] = fit(x, y, r.width, r.height, inWs(t), t.id === 'board' ? GRIP_EDGE : 0);
   t.el.style.left = px + 'px'; t.el.style.top = py + 'px';
 }
 function geomOf(t) {   // what is on screen right now, in storable form (+ the area it was measured in, so another viewport can map it proportionally)
@@ -131,7 +145,12 @@ function geomOf(t) {   // what is on screen right now, in storable form (+ the a
 function applyGeom(t, g) {
   const a = area(), mapped = g.aw > 0 && g.ah > 0 && (Math.abs(a.w - g.aw) > 1 || Math.abs(a.h - g.ah) > 1);
   const k = mapped ? Math.min(a.w / g.aw, a.h / g.ah) : 1;
-  if ((g.s != null || g.w != null) && !(t.id === 'tools' && toolsMin())) setSize(t, (g.s ?? g.w) * k, g.h != null ? g.h * k : undefined);   // the minimized button has a fixed footprint
+  if ((g.s != null || g.w != null) && !(t.id === 'tools' && toolsMin())) {   // the minimized button has a fixed footprint
+    let sz = (g.s ?? g.w) * k;
+    // A record without the area it was saved in (older format) cannot be mapped, so it is shown within this screen; records that carry their area keep their proportions at any size.
+    if (!(g.aw > 0 && g.ah > 0)) sz = Math.min(sz, t.def.axes === 's' ? Math.min(a.w, a.h - limits(t).extra) : a.w);
+    setSize(t, sz, g.h != null ? g.h * k : undefined);
+  }
   if (!mapped) return setPos(t, g.x, g.y);
   const r = t.el.getBoundingClientRect(), w0 = g.s ?? g.w ?? r.width;
   const fx = clamp((g.x - a.x0) / Math.max(1, g.aw - w0), 0, 1), fy = clamp((g.y - a.y0) / Math.max(1, g.ah - (g.bh ?? r.height)), 0, 1);
@@ -147,17 +166,18 @@ function defaults(o) {
   const anchor = (h, top, bot) => dock === 'top' ? top : dock === 'middle' ? top + (bot - top - h) / 2 : bot - h;
   const measure = (t, w) => { t.el.style.width = w + 'px'; return t.el.offsetHeight; };
   setSize(T.board, Math.min(a.w, a.h) - 80);   // measure the board's chrome (padding + bag) near its final size, not at the CSS default width
-  const bl = limits(T.board), extra = bl.extra;
+  const bl = limits(T.board), extra = bl.extra, dMin = Math.min(240, Math.min(a.w, a.h - extra));   // the default board never starts smaller than 240px unless the screen forces it
   // Minimized Game Tools: same slot, but the layout is computed with the button's real footprint and filed under its own key.
   const fin = () => { if (toolsMin() && g.tools) { g.toolsMin = { x: g.tools.x, y: g.tools.y }; delete g.tools; } return g; };
   if (o === 'landscape') {
     // board centred and as tall as the screen allows; player panels hug it on both sides; controls under the right panel
-    const s = clamp(Math.min(a.h - extra, a.w - 2 * 176 - 2 * M), bl.minW, bl.maxW);
+    const s = clamp(Math.min(a.h - extra - GRIP_EDGE, a.w - 2 * 176 - 2 * M), dMin, HUGE);
     // A panel is sized from the board: seven rack tiles about one board cell wide (+ padding). Small boards keep the 300px floor of the original layout.
     const pMax = limits(T.p0).maxW, pCap = Math.min(pMax, Math.max(300, Math.round(0.58 * s + 24)));
     const colW = clamp((a.w - s) / 2 - M, 168, pCap), pw = clamp(colW, 160, pCap);
-    if ((a.w - s) / 2 - M > pCap + 2 * M + 80) {
-      // Wide profile (shape decides, not a resolution): free space beside the board exceeds what two panels need, so the row becomes Board | Controls | Players
+    if (a.w - s > Math.min(Math.round(0.32 * s), 360) + pCap + 4 * M + 80) {
+      // Wide profile (shape decides, not a resolution): the free width beside the board holds a controls column plus a panel column, so the row becomes Board | Controls | Players.
+      // (It used to ask for two whole panel columns, one each side; with the board now exactly the board, with no frame around it, that test flipped on ultrawide screens that had always been wide.)
       const cw = clamp(Math.round(0.32 * s), 168, Math.min(limits(T.ctrls).maxW, 360)), hp = measure(T[left], pw), hq = measure(T[right], pw), hc = measure(T.ctrls, cw), ht = measure(T.tools, cw);
       const total = s + M + cw + M + pw, x0 = Math.max(a.x0, a.x0 + (a.w - total) / 2), bh = s + extra, stackH = hp + M + hq;
       const yP = clamp(a.y0 + (bh - stackH) / 2, a.y0, Math.max(a.y0, a.y1 - stackH));
@@ -189,7 +209,7 @@ function defaults(o) {
     const tw = row ? (mw ? a.w - M - mw : Math.round((a.w - M) * 0.58)) : a.w, uw = mw || (row ? a.w - M - tw : a.w);
     const hp = measure(T[left], pw); measure(T[right], pw); const hc = measure(T.ctrls, tw), ht = measure(T.tools, uw);
     const rowH = row ? Math.max(hc, ht) : hc + M + ht;
-    const s = clamp(Math.min(a.w, a.h - extra - M - hp - M - rowH - (histOn ? 150 + M : 0)), bl.minW, bl.maxW);
+    const s = clamp(Math.min(a.w - GRIP_EDGE, a.h - extra - M - hp - M - rowH - (histOn ? 150 + M : 0)), dMin, HUGE);
     const yP = a.y0 + s + extra + M, yC = yP + hp + M, below = yC + rowH + M;
     g.board = { x: a.x0 + (a.w - s) / 2, y: a.y0, s };
     g[left] = { x: a.x0, y: yP, w: pw }; g[right] = { x: a.x1 - pw, y: yP, w: pw };
@@ -209,7 +229,7 @@ export function refreshWorkspace() {
   const D = mods.some(t => !ws[o][gid(t)]) ? defaults(o) : null;   // overrides are only clamped for display, never rewritten
   for (const t of mods) applyGeom(t, ws[o][gid(t)] || D[gid(t)]);
   const bt = things.board, a = area(), over = bt.el.getBoundingClientRect().bottom - a.y1;   // display-only guard: wrapper chrome can differ by a few px from the estimate
-  if (over > 0.5) { const w = bt.el.getBoundingClientRect().width; setSize(bt, w - over); setPos(bt, parseFloat(bt.el.style.left) || a.x0, parseFloat(bt.el.style.top) || a.y0); }
+  if (over > 0.5 && !ws[o].board) { const w = bt.el.getBoundingClientRect().width; setSize(bt, w - over); setPos(bt, parseFloat(bt.el.style.left) || a.x0, parseFloat(bt.el.style.top) || a.y0); }
 }
 function reflowPopups() {
   for (const t of Object.values(things)) if (t.isPopup && !inWs(t) && t.canMove() && t.el.matches('[open],.open')) { const r = t.el.getBoundingClientRect(); setPos(t, r.left, r.top); }
@@ -263,18 +283,18 @@ function bindHandle(t, h) {
 }
 function resizeBy(t, dw, dh) {
   const r = t.el.getBoundingClientRect(), a = area(), ax = t.def.axes;
-  if (ax === 's') setSize(t, Math.min(r.width + dw, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0);
-  else if (t.def.popup) setSize(t, r.width + dw);
-  else setSize(t, Math.min(r.width + dw, a.x1 - r.left), ax === 'xy' ? Math.min(r.height + dh, a.y1 - r.top) : null);
+  if (ax === 's') setSize(t, r.width + dw, 0);
+  else if (t.def.popup) setSize(t, Math.min(r.width + dw, a.x1 - r.left));
+  else setSize(t, r.width + dw, ax === 'xy' ? r.height + dh : null);
   setPos(t, r.left, r.top); commit(t, true);
 }
 function bindGrip(t, g) {
   let rs = null, raf = 0;
   const apply = e => {
     const a = area(), r = t.el.getBoundingClientRect(), dx = e.clientX - rs.x, dy = e.clientY - rs.y, ax = t.def.axes;
-    if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, Math.min(rs.w + d, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0); }
+    if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, rs.w + d, 0); setPos(t, r.left, r.top); }   // no maximum: the board grows past the screen and is panned with its strip
     else if (t.def.popup) { setSize(t, rs.w + dx); setPos(t, r.left, r.top); }   // a popup against the right edge grows by sliding left instead of refusing
-    else { setSize(t, Math.min(rs.w + dx, a.x1 - r.left), ax === 'xy' ? Math.min(rs.h + dy, a.y1 - r.top) : null); if (ax === 'x') setPos(t, r.left, r.top); }   // height follows width (racks grow): slide it back inside
+    else { setSize(t, rs.w + dx, ax === 'xy' ? rs.h + dy : null); if (ax === 'x') setPos(t, r.left, r.top); }   // height follows width (racks grow)
   };
   g.addEventListener('pointerdown', e => {
     if (e.button || !t.canResize()) return;
@@ -299,15 +319,22 @@ function addChrome(t) {
   if (t.chrome) return; t.chrome = [];
   if (!t.isPopup) {   // modules without a title bar get a slim move strip (word log and dialogue reuse their title)
     const h = document.createElement('button'); h.type = 'button'; h.className = 'flMove';
-    h.setAttribute('aria-label', `تحريك ${t.def.label}: الأسهم للتحريك، + و − للحجم، نقر مزدوج لإعادة الضبط`); h.title = 'اسحب لتحريك ' + t.def.label;
     t.el.prepend(h); bindHandle(t, h); t.chrome.push(h);
   }
-  const g = document.createElement('button'); g.type = 'button'; g.className = 'flGrip';
-  g.setAttribute('aria-label', `تغيير حجم ${t.def.label}: الأسهم`); g.title = 'اسحب لتغيير الحجم'; g.innerHTML = GRIP;
+  const g = document.createElement('button'); g.type = 'button'; g.className = 'flGrip'; g.innerHTML = GRIP;
   t.el.append(g); bindGrip(t, g); t.chrome.push(g);
+  relabel(t);
 }
+// The handles' accessible names mention the module (for the players: the player's current name), so they are rewritten when a name changes.
+function relabel(t) {
+  for (const n of t.chrome || []) {
+    if (n.classList.contains('flMove')) { n.setAttribute('aria-label', `تحريك ${t.def.label}: الأسهم للتحريك، + و − للحجم، نقر مزدوج لإعادة الضبط`); n.title = 'اسحب لتحريك ' + t.def.label; }
+    else { n.setAttribute('aria-label', `تغيير حجم ${t.def.label}: الأسهم`); n.title = 'اسحب لتغيير الحجم'; }
+  }
+}
+onNamesChange(() => { for (const id of ['p0', 'p1']) if (things[id]) relabel(things[id]); });
 const removeChrome = t => { (t.chrome || []).forEach(n => n.remove()); t.chrome = null; };
-const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z-index', '--float-board-size']) t.el.style.removeProperty(p); };
+const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z-index', '--float-board-size', '--fu']) t.el.style.removeProperty(p); };
 
 // ---------- popups: settings, gameplay dialogue, word-log drawer ----------
 const isFixed = t => getComputedStyle(t.el).position === 'fixed' && !t.el.classList.contains('dlgModal');
@@ -359,6 +386,22 @@ export function lockGame(reason, on) { if (on) locks.add(reason); else locks.del
 // While the settings window floats (non-modal) the game behind it stays frozen, exactly as the old modal did.
 export const gameInert = on => lockGame('settings', on);
 
+// Ctrl/⌘ + wheel over a module (a trackpad pinch arrives the same way) resizes it around the pointer: the quickest way to size anything, at any scale.
+// The module stays marked active until the wheel pauses, so the layout refresh never fights the gesture; the result is committed once.
+function bindWheel(t) {
+  let timer = 0;
+  t.el.addEventListener('wheel', e => {
+    if (!ws.enabled || !(e.ctrlKey || e.metaKey) || !t.canResize()) return;
+    e.preventDefault();
+    const r = t.el.getBoundingClientRect(), f = Math.exp(-clamp(e.deltaY, -120, 120) * 0.0016);
+    flag(t, true);
+    setSize(t, r.width * f, t.def.axes === 'xy' ? r.height * f : null);
+    const n = t.el.getBoundingClientRect();
+    setPos(t, e.clientX - (e.clientX - r.left) * (n.width / r.width), e.clientY - (e.clientY - r.top) * (n.height / r.height));
+    clearTimeout(timer); timer = setTimeout(() => { flag(t, false); commit(t, true); }, 220);
+  }, { passive: false });
+}
+
 // ---------- Floating Workspace on/off ----------
 export const isFloating = () => ws.enabled;
 export function initWorkspace() {   // after buildDom(): the player panels exist now
@@ -366,6 +409,7 @@ export function initWorkspace() {   // after buildDom(): the player panels exist
     const el = document.querySelector(DEFS[id].sel);
     const t = things[id] = { id, el, def: DEFS[id], isPopup: false, canMove: () => ws.enabled, canResize: () => ws.enabled && !(id === 'tools' && toolsMin()) };
     if (id !== 'board') el.addEventListener('pointerdown', () => raise(t), true);   // board interaction never takes part in foreground ordering
+    bindWheel(t);
   }
   // Content can change a module's height after layout (counter row, rack, labels, fonts): re-fit then, but never while the user is dragging one.
   if (typeof ResizeObserver !== 'undefined') {

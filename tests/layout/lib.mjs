@@ -18,7 +18,8 @@ export async function launch() {
   return puppeteer.launch({ executablePath: await chromium.executablePath(), args: [...chromium.args, '--no-sandbox'], headless: 'shell' });
 }
 // The history suites exercise the docked log, so docked is the default here (the app itself defaults to the drawer). Pass storage: {'scrabble.layout': ...} to override.
-export const DOCKED = { 'scrabble.layout': '{"hist":"docked"}' };
+// The info bar under the board is on here: these suites compare against the layout from before it became optional, which doubles as the proof that "bar on" is pixel-identical to the old layout.
+export const DOCKED = { 'scrabble.layout': '{"hist":"docked","binfo":"on"}' };
 export async function openGame(browser, vp, { storage: given = {}, throwingStorage = false } = {}) {
   const storage = { ...DOCKED, ...given };
   const page = await browser.newPage();

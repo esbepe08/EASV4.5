@@ -44,13 +44,12 @@ for (const [W, H] of MATRIX) {
   await drag(p, '#pn0 .flGrip', 4000, 0); const pw = await rect(p, '#pn0'); await drag(p, '#tools .flMove', 0, -4000); await drag(p, '.ctrls .flMove', -4000, 0);   // tools sits on the higher rung: move it out of the way first
   await drag(p, '.ctrls .flGrip', 4000, 0);  const cw = await rect(p, '.ctrls');
   max[name] = { pw: pw.w, cw: cw.w, W };
-  ok(await outOfView(p) === '', `${name}: maximum resize stays inside the viewport ${await outOfView(p)}`);
-  ok(pw.w <= W - 16 + 0.5 && pw.w <= 900.5 && cw.w <= 1000.5, `${name}: ceilings respected (player ${pw.w.toFixed(0)}, controls ${cw.w.toFixed(0)})`);
+  ok(pw.w > Math.max(W, 900) && cw.w > Math.max(W, 1000), `${name}: no ceilings: player and controls follow the drag past the screen and the old limits (player ${pw.w.toFixed(0)}, controls ${cw.w.toFixed(0)})`);
   const big = await slotInfo(p), nCols = await cols(p);
   ok(big.slot >= d0.slot - 0.5 && big.sq && big.inside, `${name}: wider panel gives bigger tiles, still square and inside (${d0.slot.toFixed(1)} -> ${big.slot.toFixed(1)})`);
   ok(big.font / big.slot > .35 && big.font / big.slot < .85, `${name}: glyph stays proportional at maximum width`);
-  ok(big.pname >= d0.pname - 0.1 && big.pname <= 40, `${name}: header type scales within bounds (${d0.pname.toFixed(1)} -> ${big.pname.toFixed(1)})`);
-  ok(big.bh >= 30 && big.bh <= 90, `${name}: buttons stay usable and proportionate at maximum width (${big.bh.toFixed(0)}px)`);
+  ok(big.pname > d0.pname && big.pname > 40, `${name}: header type keeps scaling in step with the panel, with no cap (${d0.pname.toFixed(1)} -> ${big.pname.toFixed(1)})`);
+  ok(big.bh >= 30 && big.bh / cw.w < 0.2, `${name}: buttons stay proportionate to the module at any width (${big.bh.toFixed(0)}px)`);
   await drag(p, '.ctrls .flGrip', -4000, 0); const nn = await cols(p), cmin = await rect(p, '.ctrls');
   ok(nn <= nCols && nn >= 1, `${name}: controls use fewer columns when narrow (${nCols} -> ${nn})`);
   ok(await p.evaluate(() => ['.ctrls:not(#tools)', '#tools'].every(m => { const c = document.querySelector(m).getBoundingClientRect(); return [...document.querySelectorAll(m + ' > .btn')].filter(x => getComputedStyle(x).display !== 'none').every(x => { const r = x.getBoundingClientRect(); return r.right <= c.right + 1 && r.left >= c.left - 1 && r.width >= 30; }); })), `${name}: no button clipped in either control module`);
@@ -59,9 +58,7 @@ for (const [W, H] of MATRIX) {
 }
 const M = n => max[n];
 ok(M('1920x1080').pw > 520 && M('1920x1080').cw > 640, `Full HD allows players > 520 and controls > 640 (${M('1920x1080').pw.toFixed(0)} / ${M('1920x1080').cw.toFixed(0)})`);
-ok(M('2560x1440').pw >= M('1366x768').pw && M('1366x768').pw >= M('1024x768').pw && M('1920x1080').pw > M('1366x768').pw, 'player maximum grows with the viewport');
-ok(M('2560x1440').cw >= M('1920x1080').cw && M('1920x1080').cw > M('1366x768').cw, 'controls maximum grows with the viewport');
-ok(M('390x844').pw <= 390 && M('360x800').pw <= 360 && M('844x390').pw <= 844, 'small viewports restrict the maximum safely');
+ok(Object.values(max).every(m => m.pw > m.W && m.cw > m.W), 'on every viewport (phone to ultrawide) a player panel and the controls can be made wider than the screen');
 
 // Saved geometry: clamped for display on a smaller window, NOT rewritten, and restored when the room returns; live window resizing and rotation never break it.
 {

@@ -1,8 +1,10 @@
 import { showFloat, gameInert, lockGame } from './float.js';
 // DOM rendering, toasts and dialogs. Reads state; never mutates game rules.
-import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL, NAMES } from './config.js';
+import { SIZE, DURATIONS, BINGO, TOAST_MS, LAYOUT, GLYPH, FACE, LABEL, MIN_BAG_SWAP } from './config.js';
 import { TILE_MODES } from './modes.js';
 import { $, S, app, fmt, inMove, cur, profile } from './state.js';
+import { nameOf, nameHtml, nameIso, esc, onNamesChange } from './names.js';
+import { haptic } from './haptics.js';
 
 let cells = [], toastTimer = 0, dlgCb = null, dlgCancel = null;
 const hs = {id: -1, v: -1};   // last rendered history (game id / version)
@@ -14,9 +16,22 @@ export function buildDom() {
     const d = document.createElement('div'); d.dataset.r = i / SIZE | 0; d.dataset.c = i % SIZE; d.tabIndex = 0; d.setAttribute('role', 'gridcell'); cells.push(d); board.append(d);
   }
   bindDlg();
-  $('#players').innerHTML = [0, 1].map(i => `<div class="panel" id="pn${i}"><div class="phead"><span class="pname">${NAMES[i]}</span><span class="ptime" id="t${i}">25:00</span><span class="pscore" id="sc${i}">0</span></div><div class="rack" id="rk${i}" aria-label="رفّ ${NAMES[i]}"></div></div>`).join('');
+  // The name is a small control (js/nameedit.js: press and hold, double-click or Enter edits it in place); its text and the rack's accessible name are filled in by syncNames().
+  $('#players').innerHTML = [0, 1].map(i => `<div class="panel" id="pn${i}"><div class="phead"><span class="pname" tabindex="0" role="button"><bdi></bdi></span><span class="ptime" id="t${i}">25:00</span><span class="pscore" id="sc${i}">0</span></div><div class="rack" id="rk${i}"></div></div>`).join('');
+  syncNames(); onNamesChange(syncNames);
   $('#sf').innerHTML = DURATIONS.map(m => `<button class="btn" value="${m}"><b>${m}</b><span>دقيقة</span></button>`).join('');
   $('#mf').innerHTML = Object.values(TILE_MODES).map(m => `<button class="btn modeBtn" value="${m.id}"><span class="mAr">${m.labelAr}</span><span class="mEn">${m.labelEn}</span><span class="mDesc">${m.descAr}</span></button>`).join('');
+}
+// Names are a device preference (js/names.js). When one changes, the panels, the racks' accessible names and the history (which prints names) follow.
+export function syncNames() {
+  [0, 1].forEach(i => {
+    const n = nameOf(i), el = $('#pn' + i + ' .pname'), t = el.firstElementChild;
+    if (t.textContent !== n) t.textContent = n;
+    el.setAttribute('aria-label', `تعديل اسم اللاعب: ${n}`);
+    el.title = 'اضغط مطولًا أو انقر مرتين لتعديل الاسم';
+    $('#rk' + i).setAttribute('aria-label', 'رفّ ' + n);
+  });
+  if (S.hist) { hs.v = -1; renderHist(); }
 }
 // The blank picker only offers the letters of the active tile mode (rebuilt for every new game).
 export function buildBlankPicker() {
@@ -25,6 +40,7 @@ export function buildBlankPicker() {
 
 // ---------- Feedback & dialogs ----------
 export function toast(msg, ok) {
+  if (ok !== false) haptic('bad');   // an error or a hint: the same condition that gives the toast its warning look
   const el = $('#toast'); el.textContent = msg; el.className = ok === false ? 'ok' : 'bad';
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.textContent = ''; el.className = ''; }, TOAST_MS);
 }
@@ -73,9 +89,10 @@ const TROPHY = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="
 export function showResult({reason, rows, winner}, onNew) {
   const box = document.createElement('div'); box.className = 'res';
   box.innerHTML = `<p class="resWhy">${reason}</p>`
-    + `<p class="resWin${winner < 0 ? ' draw' : ''}">${winner < 0 ? 'تعادل!' : `${TROPHY}<span>الفائز: ${rows[winner].name}</span>`}</p>`
-    + `<div class="resCards">${rows.map((r, i) => `<div class="resCard${i === winner ? ' win' : ''}"><span class="resName">${r.name}</span><b class="resScore">${r.score}</b>`
+    + `<p class="resWin${winner < 0 ? ' draw' : ''}">${winner < 0 ? 'تعادل!' : `${TROPHY}<span>الفائز: <bdi>${esc(rows[winner].name)}</bdi></span>`}</p>`
+    + `<div class="resCards">${rows.map((r, i) => `<div class="resCard${i === winner ? ' win' : ''}"><span class="resName"><bdi>${esc(r.name)}</bdi></span><b class="resScore">${r.score}</b>`
       + `<span class="resNote">خصم <span class="num">${r.ded}</span></span><span class="resNote">مكافأة وقت <span class="num">+${r.bon}</span></span></div>`).join('')}</div>`;
+  haptic('end');
   ask('انتهت اللعبة', box, 'لعبة جديدة', onNew);
 }
 // Called by the dialog 'close' listener: returns and clears the pending callbacks.
@@ -140,7 +157,27 @@ function renderControls() {
   $('#bPass').disabled = E || S.swap || mv;
   $('#bUndo').disabled = E || S.swap || mv || !S.undo;
   $('#bJudge').disabled = E || S.swap || mv || !S.undo;
-  $('#bagInfo').textContent = `${profile().labelAr} · الكيس: ${S.bag.length}`;
+  renderBag();
+}
+
+// The bag count: in the info bar (when shown), in the word log, and on the swap button, the one action it limits. Text is only rewritten when it changes, so nothing is re-announced.
+const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
+function renderBag() {
+  const n = S.bag.length, info = `${profile().labelAr} · الكيس: ${n}`, canSwap = n >= MIN_BAG_SWAP;
+  setText($('#bagInfo'), info); setText($('#hBag'), info);
+  const badge = $('#bagBadge'), sw = $('#bSwap');
+  badge.dataset.s = n === 0 || !canSwap ? 'stop' : n <= MIN_BAG_SWAP ? 'low' : 'ok';
+  const sub = `الكيس: ${n}`;
+  if (sw.dataset.sub !== sub) sw.dataset.sub = sub;
+  setText(badge, String(n));
+  setText($('#bagSr'), n === 0 ? '، الكيس فارغ' : canSwap ? `، في الكيس ${n} قطعة` : `، في الكيس ${n} قطعة فقط، لا يمكن التبديل`);
+}
+// Said once, when a move takes the bag down to 7 or fewer tiles (swapping ends below 7) and when it empties, added to that move's toast. Only when the info bar is hidden.
+export function bagNote(before, after) {
+  if (document.documentElement.dataset.binfo === 'on') return '';
+  if (after === 0 && before > 0) return ' · نفد الكيس';
+  if (after <= MIN_BAG_SWAP && before > MIN_BAG_SWAP) return ` · ${after === 1 ? 'بقيت قطعة واحدة' : after === 2 ? 'بقيت قطعتان' : `بقي ${after} قطع`} في الكيس`;
+  return '';
 }
 export function tickUI() {
   S.players.forEach((p, i) => {
@@ -153,7 +190,7 @@ export function tickUI() {
 // Word chips shared by the history list and the judge dialog.
 export const chips = e => `<div class="jw">${e.words.map(w => `<span class="chip">${w.w} <b>${w.pts}</b></span>`).join('')}${e.bingo ? '<span class="chip bingo">+' + BINGO + '</span>' : ''}</div>`;
 function histItem(e) {
-  const cls = 'hi p' + e.p + (e.st === 'void' ? ' void' : ''), who = NAMES[e.p];
+  const cls = 'hi p' + e.p + (e.st === 'void' ? ' void' : ''), who = nameHtml(e.p);
   if (e.type !== 'move')
     return `<li class="${cls}"><div class="hh"><span class="hn">${e.n}</span><span>${who} — ${e.type === 'pass' ? 'مرّر الدور' : `بدّل ${e.cnt} قطع`}</span></div></li>`;
   const j = e.st ? `<div class="hj ${e.st}">${e.st === 'ok' ? '✔ صحيح' : '✖ خطأ'}${e.pen ? ` · غرامة التحدي −${e.pen}` : ''}</div>` : '';
@@ -165,7 +202,7 @@ function renderHist() {
   const best = S.hist.filter(e => e.type === 'move' && e.st !== 'void')
     .flatMap(e => e.words.map(w => ({...w, p: e.p}))).reduce((b, w) => !b || w.pts > b.pts ? w : b, null);
   $('#hList').innerHTML = S.hist.length ? S.hist.map(histItem).reverse().join('') : '<li class="hempty">لم تُسجَّل أي حركة بعد.</li>';
-  $('#hBest').textContent = best ? `أعلى كلمة: ${best.w} (${best.pts} نقطة — ${NAMES[best.p]})` : '';
+  $('#hBest').textContent = best ? `أعلى كلمة: ${best.w} (${best.pts} نقطة — ${nameIso(best.p)})` : '';
 }
 // Optional observer called after every render (js/persist.js uses it to save the match); the UI itself does not depend on it.
 let afterRender = null;

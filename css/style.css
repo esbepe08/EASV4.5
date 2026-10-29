@@ -21,6 +21,20 @@ body{font-family:var(--font);color:var(--text-main);min-height:100dvh;padding:ma
 background:radial-gradient(ellipse at top,var(--bg-page-1),var(--bg-page-2) 70%) fixed;font-size:18px;transition:color .2s ease}
 .app{max-width:calc(760px*max(1,var(--board-scale)));margin:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 .bag{margin-top:8px;text-align:center;font-size:1rem;min-height:1.2em}
+/* Info bar under the board (mode · bag count). Hidden by default (Settings → التخطيط → شريط معلومات اللوح): it leaves the layout, so the board can use the room, but stays in the page as
+   text for screen readers. --bagx / --bagxl are the vertical room the bar used to take in the size formulas below (wide / short landscape); with the bar hidden they are 0.
+   The numbers add back to the old constants exactly (97 + 28 = 125, 32 + 28 = 60, 9 + 21 = 30, 88 + 28 = 116), so with the bar on nothing changes by a pixel. */
+html{--bagx:28px;--bagxl:21px}
+html:not([data-binfo="on"]){--bagx:0px;--bagxl:0px}
+html:not([data-binfo="on"]) .bag{position:absolute;width:1px;height:1px;min-height:0;margin:0;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.vh{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+/* The bag count rides on the swap button, the one action it limits: muted while swapping is possible, accent when 7 or fewer tiles are left, struck through when swapping is no longer allowed. Hidden when the bar is shown. */
+.bagBadge{position:absolute;inset-block-start:-6px;inset-inline-end:-4px;min-width:1.5em;padding:0 .35em;border-radius:999px;font:700 .72rem/1.5 var(--font);text-align:center;font-variant-numeric:tabular-nums;color:var(--text-main);background:var(--surface-inset);border:1px solid var(--dialog-line);pointer-events:none}
+.bagBadge[data-s="low"],.bagBadge[data-s="stop"]{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.bagBadge[data-s="stop"]{text-decoration:line-through}
+html[data-binfo="on"] .bagBadge{display:none}
+.hbag{margin:0 0 6px;font-size:.88rem;opacity:.85;line-height:1.4}
+html[data-binfo="on"] .hbag{display:none}
 .boardWrap{min-width:0;position:relative}
 .board{container-type:inline-size;--lf:4.6cqw;--vf:1.8cqw;display:grid;grid-template:repeat(15,minmax(0,1fr))/repeat(15,minmax(0,1fr));aspect-ratio:1;width:100%;max-width:calc(720px*var(--board-scale));margin-inline:auto;
 padding:1.2%;border-radius:10px;background:linear-gradient(135deg,var(--board-1),var(--board-2));border:3px solid var(--board-line);box-shadow:0 10px 30px #000a,inset 0 0 0 2px var(--board-rim)}
@@ -64,6 +78,11 @@ background:linear-gradient(145deg,var(--tile-1),var(--tile-2));box-shadow:inset 
 @media(hover:hover){.sq.has.mv:hover::before{transform:translateY(max(2px,.9cqw)) scale(1.07);opacity:.5}}   /* the pending tile lifts a little more under the pointer (see .tile:hover), so its shadow follows */
 .sq.has.fall::before{animation:cast .3s ease-out}
 @keyframes cast{from{transform:translateY(1.3cqw) scale(1.3);opacity:.3}}
+/* Word flash (js/flash.js): the squares of the words just scored light up one after another, in reading order (--wd is each square's delay).
+   One opacity pulse on the square's ::after; the square rises one level while it plays, so a neighbour's shadow never cuts the ring. */
+.sq.wf{z-index:3}
+.sq.wf::after{content:"";position:absolute;inset:0;border-radius:12%;pointer-events:none;background:color-mix(in srgb,var(--accent) 38%,transparent);box-shadow:0 0 0 max(1px,.28cqw) var(--accent),0 0 1.4cqw var(--accent);opacity:0;animation:wflash .8s ease-out var(--wd,0s) both}
+@keyframes wflash{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
 @media(hover:hover){.tile:not(.dim):hover{transform:translateY(-5%)}}
 .side{display:grid;gap:10px;align-content:start;min-width:0}
 #toast{min-height:2.4rem;display:grid;place-items:center;text-align:center;border-radius:8px;padding:2px 10px;font-weight:700;transition:background .3s}
@@ -81,7 +100,20 @@ background:linear-gradient(var(--btn-1),var(--btn-2));box-shadow:inset 0 1px 0 #
 .panel.on{border-color:var(--accent);box-shadow:0 0 12px var(--accent);box-shadow:0 0 14px color-mix(in srgb,var(--accent) 45%,transparent)}
 .phead{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"n t s";align-items:center;gap:0 10px;margin-bottom:6px}
 .pname{grid-area:n}.ptime{grid-area:t}.pscore{grid-area:s}
-.pname{font-size:1.1rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.panel.on .pname::before{content:"● ";color:var(--turn-dot)}
+.pname{font-size:1.1rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Whose turn: a small green dot before the name, a fixed size (so it can never change a rack or a panel), breathing softly while it is that player's turn.
+   Opacity and transform only; with reduced motion it is simply a still dot. */
+.panel.on .pname::before{content:"";display:inline-block;width:.5em;height:.5em;margin-inline-end:.45em;border-radius:50%;background:var(--turn-dot);vertical-align:.1em;animation:turnDot 2.4s ease-in-out infinite}
+@keyframes turnDot{50%{opacity:.4;transform:scale(.72)}}
+/* The name is a small control (js/nameedit.js): press and hold (a line fills under it), double-click or Enter edits it in place. The field takes over the label's exact row. */
+.pname{position:relative;border-radius:6px;cursor:text;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.pname:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.pname::after{content:"";position:absolute;inset-inline:0;bottom:0;height:2px;border-radius:1px;background:var(--accent);opacity:0;transform:scaleX(0);transform-origin:100% 50%}
+.pname.pressing::after{opacity:1;transform:scaleX(1);animation:nameHold .5s linear}
+@keyframes nameHold{from{transform:scaleX(0)}}
+.pnameEdit{grid-area:n;min-width:0;width:100%;margin:0;padding:0 .35em;font-family:inherit;font-weight:700;line-height:1;color:var(--text-main);caret-color:var(--accent);background:var(--surface-inset);border:0;border-bottom:2px solid var(--accent);border-radius:6px 6px 0 0}
+.pnameEdit:focus{outline:2px solid var(--focus);outline-offset:1px}
+.pnameEdit::placeholder{color:var(--text-main);opacity:.45;font-weight:400}
 .pscore{font-size:1.3rem;color:var(--accent-text);font-weight:700}.pscore.pop{animation:pop .5s}
 @keyframes pop{40%{transform:scale(1.4)}}
 .ptime{font:700 1.15rem var(--font);font-variant-numeric:tabular-nums;direction:ltr;opacity:.75}
@@ -149,9 +181,9 @@ button,input,textarea,select{font-family:inherit}
 @media(max-width:420px){body{font-size:16px;padding-inline:4px;overflow-x:hidden}.app{gap:8px}.boardWrap{width:100%}.board{width:min(100%,calc(100vw - 8px))}.side{gap:8px}.ctrls .btn{min-height:calc(44px*var(--btn-scale))}}
 /* Desktop / 16:9: history | board | players+buttons in one screen (phones and portrait tablets keep the single column above) */
 @media(min-width:1000px) and (min-height:560px){
-.app{--A:min(calc(100vw - 16px),1600px);--bo:max(340px,min(calc((100dvh - 125px)*var(--board-scale)),calc(100vw - 640px),calc(880px*var(--board-scale))));
+.app{--A:min(calc(100vw - 16px),1600px);--bo:max(340px,min(calc((100dvh - 97px - var(--bagx))*var(--board-scale)),calc(100vw - 640px),calc(880px*var(--board-scale))));
 --sw:calc((var(--A) - 20px - var(--bo))/2);--hw:max(230px,calc(var(--sw)*.78*var(--hist-w)));
---bs:max(340px,min(calc((100dvh - 125px)*var(--board-scale)),calc(var(--A) - 20px - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
+--bs:max(340px,min(calc((100dvh - 97px - var(--bagx))*var(--board-scale)),calc(var(--A) - 20px - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
 max-width:1600px;align-items:start;justify-content:center;
 grid-template-columns:var(--sw) var(--bs) var(--hw);grid-template-areas:"head head head" "side board hist"}
 .boardWrap{grid-area:board}.side{grid-area:side}
@@ -162,7 +194,7 @@ grid-template-columns:var(--sw) var(--bs) var(--hw);grid-template-areas:"head he
 /* Tilted phones / short or narrow landscape screens: the board stays pinned on the left at full height, players + buttons sit beside it and the history follows below. */
 @media(orientation:landscape) and (max-width:999px),(orientation:landscape) and (max-height:559px){
 body{padding-inline:max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-right))}
-.app{--lb:max(220px,min(calc((100dvh - 60px)*var(--board-scale)),calc(100vw - 386px),calc(880px*var(--board-scale))));max-width:none;align-items:start;column-gap:10px;
+.app{--lb:max(220px,min(calc((100dvh - 32px - var(--bagx))*var(--board-scale)),calc(100vw - 386px),calc(880px*var(--board-scale))));max-width:none;align-items:start;column-gap:10px;
 grid-template-columns:minmax(0,1fr) var(--lb);grid-template-areas:"head board" "side board" "hist board"}
 .boardWrap{grid-area:board;position:sticky;top:max(8px,env(safe-area-inset-top))}
 .board{width:var(--lb);max-width:none}
@@ -177,7 +209,7 @@ grid-template-columns:minmax(0,1fr) var(--lb);grid-template-areas:"head board" "
 @media(orientation:landscape) and (max-height:559px) and (min-width:720px){
 body{padding-top:max(4px,env(safe-area-inset-top));padding-bottom:max(4px,env(safe-area-inset-bottom))}
 .app{--sw:clamp(212px,27vw,300px);--hw:calc(clamp(150px,22vw,260px)*var(--hist-w));justify-content:center;
---lb:max(220px,min(calc((100dvh - 30px - max(0px,env(safe-area-inset-top) - 4px) - max(0px,env(safe-area-inset-bottom) - 4px))*var(--board-scale)),calc(100vw - 20px - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)) - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
+--lb:max(220px,min(calc((100dvh - 9px - var(--bagxl) - max(0px,env(safe-area-inset-top) - 4px) - max(0px,env(safe-area-inset-bottom) - 4px))*var(--board-scale)),calc(100vw - 20px - max(8px,env(safe-area-inset-left)) - max(8px,env(safe-area-inset-right)) - var(--sw) - var(--hw)),calc(880px*var(--board-scale))));
 grid-template-columns:minmax(0,var(--sw)) var(--lb) minmax(0,var(--hw));grid-template-rows:auto minmax(0,1fr);
 grid-template-areas:"side board head" "side board hist"}
 .boardWrap{top:max(4px,env(safe-area-inset-top))}
@@ -227,6 +259,13 @@ html:not([data-hist="drawer"]) .ctrls #bLog{display:none}
 .seg{display:flex;gap:6px}.seg .btn{flex:1;min-height:40px}
 .seg .btn[aria-pressed="true"]{background:linear-gradient(var(--btn-main-1),var(--btn-main-2));color:var(--btn-main-text);outline:2px solid var(--accent);outline-offset:1px}
 .seg .btn[aria-pressed="true"]::before{content:"✓ "}
+/* Settings: player names, notes, fullscreen */
+.nmField{width:100%;min-height:42px;padding:6px 10px;font:700 1.05rem var(--font);color:var(--text-main);background:var(--dialog-bg);border:2px solid var(--dialog-line);border-radius:8px}
+.nmField::placeholder{color:var(--text-main);opacity:.5;font-weight:400}
+.nmField:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+.nmField[aria-invalid="true"]{border-color:var(--verdict-bad)}
+.setNote{margin:0;font-size:.9rem;line-height:1.5;opacity:.85}
+#fsSet{display:flex;align-items:center;justify-content:center;gap:.5em}#fsSet[hidden]{display:none}
 /* Word log as an on-demand drawer: out of the grid, slides in from the left edge, closed = invisible and unfocusable */
 html[data-hist="drawer"] .hist{position:fixed;inset-block:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-bottom));inset-inline-end:8px;z-index:30;
 width:min(92vw,400px);height:auto;align-self:auto;contain:none;box-shadow:0 12px 40px #000c;visibility:hidden;transform:translateX(-115%);transition:transform .25s ease,visibility .25s}
@@ -252,7 +291,7 @@ html[data-layout="duel"]:not([data-hist="drawer"]) .hist{grid-area:hist;height:m
 /* Any landscape screen at least 700x560: panels | board | panels. --ov is the real vertical overhead (padding, message bar, bag row, two button rows,
    gaps), so board + overhead always equals the viewport height and the page never needs scrolling; width is the other limit. */
 @media(orientation:landscape) and (min-width:700px) and (min-height:560px){
-html[data-layout="duel"] .app{--ov:calc(116px + 2*46px*var(--btn-scale) + var(--btn-gap));
+html[data-layout="duel"] .app{--ov:calc(88px + var(--bagx) + 2*46px*var(--btn-scale) + var(--btn-gap));
 --bs:max(260px,min(calc((100dvh - var(--ov))*var(--board-scale)),calc(100vw - 460px),calc(880px*var(--board-scale))));
 grid-template-columns:minmax(0,1fr) var(--bs) minmax(0,1fr);
 grid-template-areas:". toast ." "p2 board p1" "p2 ctrls p1" "hist hist hist"}
@@ -285,7 +324,7 @@ html[data-bstyle="iconlabel"] .ctrls .btn{flex-direction:column;gap:2px;line-hei
 html[data-bstyle="iconlabel"] .ctrls .lbl{font-size:.68em;font-weight:600}
 html[data-bstyle="iconlabel"] .ctrls .ic{width:1.35em;height:1.35em}
 @media(orientation:landscape) and (min-width:700px) and (min-height:560px){
-html[data-layout="duel"][data-bstyle="icon"] .app{--ov:calc(116px + 46px*var(--btn-scale) + var(--btn-gap))}
+html[data-layout="duel"][data-bstyle="icon"] .app{--ov:calc(88px + var(--bagx) + 46px*var(--btn-scale) + var(--btn-gap))}
 }
 /* Floating windows (js/float.js): settings + word-log drawer share one look and one behaviour */
 #ad{position:fixed;inset:auto;margin:0;max-width:calc(100vw - 16px);max-height:min(72dvh,calc(100dvh - 16px));box-shadow:0 12px 40px #000c}
@@ -304,3 +343,5 @@ html[data-hist="drawer"] .hist{inset:auto;width:min(calc(100vw - 16px),380px);he
 /* ...except the touch feedback: the picked tile's flicker is a 1 Hz colour pulse with no movement (under WCAG's 3 flashes/s limit) and it is feedback, not decoration.
    Without this the flicker silently vanished on every device with "reduce motion" on (Windows: animation effects off), leaving a static glow. */
 .tile.pick{animation:blink 1s ease-in-out infinite!important}}
+/* With reduced motion the word flash is not a sequence: the scored words are simply held highlighted for a moment (js/flash.js removes the class). */
+@media(prefers-reduced-motion:reduce){.sq.wf::after{opacity:.9!important}}
