@@ -18,7 +18,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <!-- Pre-paint: reuse the saved theme id so there is no flash of the default theme. An unknown id simply matches no theme block, i.e. classic. themes.js validates it again at startup. -->
 <script>try{var t=localStorage.getItem('scrabble.theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
-try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(localStorage.getItem('scrabble.layout'))||{};d.bstyle=/^(iconlabel|text)$/.test(l.bstyle)?l.bstyle:'icon';d.pdock=/^(top|middle)$/.test(l.pdock)?l.pdock:'bottom';if(l.layout==='duel'){d.layout='duel';if(l.p1==='right')d.swap='true'}if(l.hist==='docked')d.hist='docked'}catch(e){}</script>
+try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(localStorage.getItem('scrabble.layout'))||{};d.bstyle=/^(iconlabel|text)$/.test(l.bstyle)?l.bstyle:'icon';d.pdock=/^(top|middle)$/.test(l.pdock)?l.pdock:'bottom';if(l.layout==='duel'){d.layout='duel';if(l.p1==='right')d.swap='true'}if(l.hist==='docked')d.hist='docked';d.binfo=l.binfo==='on'?'on':'off'}catch(e){}</script>
 <link rel="stylesheet" href="css/themes.css">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/float.css">
@@ -37,7 +37,7 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <div class="ctrls">
 <button class="btn main" id="bSubmit" aria-label="احتساب"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="lbl">احتساب</span></button>
 <button class="btn" id="bCancel"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9l6 6M15 9l-6 6"/></svg><span class="lbl">إلغاء الحركة</span></button>
-<button class="btn" id="bSwap"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"/></svg><span class="lbl">تبديل القطع</span></button>
+<button class="btn" id="bSwap"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"/></svg><span class="lbl">تبديل القطع</span><span class="bagBadge" id="bagBadge" aria-hidden="true"></span><span class="vh" id="bagSr"></span></button>
 <button class="btn" id="bPass"><svg class="ic flip" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l9 7-9 7zM18 5v14"/></svg><span class="lbl">تمرير الدور</span></button>
 <button class="btn" id="bUndo"><svg class="ic flip" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/></svg><span class="lbl">تراجع</span></button>
 <button class="btn danger" id="bNew"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">لعبة جديدة</span></button>
@@ -48,7 +48,7 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 </div>
 <div class="tools" id="tools" role="group" aria-label="أدوات اللعبة"></div>
 </section>
-<aside class="hist" id="hist" aria-label="سجل الكلمات"><button type="button" class="histToggle" id="hToggle" aria-controls="hList" aria-expanded="true">إخفاء السجل</button><h2>سجل الكلمات</h2><ol class="hl" id="hList"></ol><p class="hbest" id="hBest"></p></aside>
+<aside class="hist" id="hist" aria-label="سجل الكلمات"><button type="button" class="histToggle" id="hToggle" aria-controls="hList" aria-expanded="true">إخفاء السجل</button><h2>سجل الكلمات</h2><p class="hbag" id="hBag"></p><ol class="hl" id="hList"></ol><p class="hbest" id="hBest"></p></aside>
 </main>
 <dialog id="dlg" aria-labelledby="dT"><h2 id="dT" tabindex="-1" autofocus></h2><div id="dM"></div><form method="dialog" id="dF"></form></dialog>
 <dialog id="md" aria-labelledby="mT"><h2 id="mT" tabindex="-1" autofocus>اختر نمط الحروف</h2><form method="dialog" id="mf"></form><form method="dialog" class="dlgRow"><button class="btn" id="mCancel" value="">إلغاء</button></form></dialog>
@@ -60,14 +60,21 @@ try{var d=document.documentElement.dataset;d.hist='drawer';var l=JSON.parse(loca
 <div class="setPanel">
 <h3 class="setH">المظهر</h3>
 <div class="thGrid" id="thB" role="group" aria-label="المظهر"></div>
+<h3 class="setH">اللاعبون</h3>
+<div class="dimList" id="nmB"></div>
 <h3 class="setH">التخطيط</h3>
 <div class="dimList" id="lyB"></div>
 <button class="btn" id="flReset" type="button">إعادة ضبط العناصر العائمة</button>
+<div id="hpSec" hidden>
+<h3 class="setH">اللمس</h3>
+<div class="dimList" id="hpB"></div>
+</div>
 <h3 class="setH">التطبيق</h3>
 <div class="pwaBox">
 <p id="pwaStatus" class="pwaStatus" role="status"></p>
 <button class="btn main" id="pwaInstall" type="button" hidden>تثبيت التطبيق</button>
 <p id="pwaHint" class="pwaStatus" hidden></p>
+<button type="button" class="btn" id="fsSet" aria-pressed="false" aria-label="ملء الشاشة" title="ملء الشاشة"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="lbl">ملء الشاشة</span></button>
 </div>
 </div>
 </dialog>

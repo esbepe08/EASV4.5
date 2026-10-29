@@ -19,7 +19,7 @@
  */
 'use strict';
 
-const VERSION = '0741a26f09a2';   // stamped by tools/stamp-sw.mjs
+const VERSION = '646a1a09c308';   // stamped by tools/stamp-sw.mjs
 const PREFIX = 'arabic-scrabble-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const RUNTIME = `${PREFIX}runtime-${VERSION}`;
@@ -46,6 +46,10 @@ const PRECACHE = [
   "js/layout.js",
   "js/float.js",
   "js/fullscreen.js",
+  "js/names.js",
+  "js/nameedit.js",
+  "js/flash.js",
+  "js/haptics.js",
   "js/histview.js",
   "js/cover.js",
   "js/persist.js",

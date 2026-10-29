@@ -3,11 +3,12 @@
 // it only reads S/app to serialise, and on restore rebuilds the game through the same createState() used for a new game.
 //   scrabble.match   one JSON document; absent when there is nothing worth resuming (no move yet, or the game has ended).
 // Settings (theme, layout, dimensions, floating windows) live under their own keys and are never touched here.
-import { SIZE, RACK, NAMES } from './config.js';
+import { SIZE, RACK } from './config.js';
 import { TILE_MODES } from './modes.js';
 import { S, app, BY, createState } from './state.js';
 import { tick } from './game.js';
 import { render, ask, toast, buildBlankPicker, chooseMode } from './ui.js';
+import { nameIso } from './names.js';
 
 const KEY = 'scrabble.match', FORMAT = 1;
 // Set to false to keep the clocks running while the app is in the background (they are paused by default; see lifecycle below).
@@ -147,7 +148,7 @@ export function startFlow(saved) {
   if (!saved) return chooseMode();
   const mins = ms => Math.ceil(ms / 60000);
   const msg = `${TILE_MODES[saved.mode].labelAr} · ${saved.hist.length} حركة مسجّلة\n`
-    + `${NAMES[0]}: ${saved.scores[0]} نقطة (${mins(saved.times[0])} د) · ${NAMES[1]}: ${saved.scores[1]} نقطة (${mins(saved.times[1])} د)\n\n`
+    + `${nameIso(0)}: ${saved.scores[0]} نقطة (${mins(saved.times[0])} د) · ${nameIso(1)}: ${saved.scores[1]} نقطة (${mins(saved.times[1])} د)\n\n`
     + 'هل تريد متابعتها؟ اختيار «مباراة جديدة» لا يحذفها إلا عند بدء اللعبة الجديدة فعلًا.';
   ask('مباراة غير مكتملة', msg, 'متابعة', () => { restoreMatch(saved); render(); toast('تمت استعادة المباراة المحفوظة', false); }, chooseMode, 'btn main', 'مباراة جديدة');
 }

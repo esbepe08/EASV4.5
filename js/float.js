@@ -10,7 +10,7 @@
 // Storage: scrabble.float (popup positions, unchanged format) and scrabble.floatWorkspace.v2 (on/off + per-orientation geometry). Every saved module
 // also remembers the area (aw, ah) and its own height (bh) it was saved in, so a different viewport maps the layout proportionally (see applyGeom).
 // Pure UI: no game state is read or written here.
-import { NAMES } from './config.js';
+import { nameOf, onNamesChange } from './names.js';
 
 const LEGACY = 'scrabble.float', WSKEY = 'scrabble.floatWorkspace.v2', M = 8;
 const ORI = ['portrait', 'landscape'];
@@ -55,14 +55,14 @@ function area() {
   return a;
 }
 const orient = () => innerWidth > innerHeight ? 'landscape' : 'portrait';
-const fit = (x, y, w, h) => { const a = area(); return [clamp(x, a.x0, a.x1 - w), clamp(y, a.y0, a.y1 - h)]; };
+const fit = (x, y, w, h, r = 0) => { const a = area(); return [clamp(x, a.x0, a.x1 - r - w), clamp(y, a.y0, a.y1 - r - h)]; };   // r: room kept free at the right/bottom (the board's resize grip)
 
 // ---------- module table ----------
 // axes: 's' = square (board, 1:1), 'x' = width only (height follows the content, so racks and buttons are never stretched), 'xy' = both
 const DEFS = {
   board: { sel: '.boardWrap', axes: 's', label: 'اللوح' },
-  p0: { sel: '#pn0', axes: 'x', label: NAMES[0] },
-  p1: { sel: '#pn1', axes: 'x', label: NAMES[1] },
+  p0: { sel: '#pn0', axes: 'x', get label() { return nameOf(0); } },   // the players' labels follow their names (see relabel)
+  p1: { sel: '#pn1', axes: 'x', get label() { return nameOf(1); } },
   ctrls: { sel: '.ctrls', axes: 'x', label: 'أزرار الدور' },          // Turn Controls
   tools: { sel: '#tools', axes: 'x', label: 'أدوات اللعبة' },        // Game Tools
   hist: { axes: 'xy', label: 'سجل الكلمات' },
@@ -91,13 +91,16 @@ export function raise(t) {
 
 // Resize ranges come from the live CSS viewport (never from a device list): a usability floor that keeps small screens exactly as they were, a share of the
 // available width that lets large and ultrawide screens grow, and a generous ceiling so nothing becomes absurd. devicePixelRatio plays no part.
-const FLUID = { player: { floor: 520, frac: .36, ceil: 900 }, ctrls: { floor: 640, frac: .4, ceil: 1000 }, tools: { floor: 480, frac: .3, ceil: 800 }, hist: { floor: 560, frac: .3, ceil: 900 }, board: { ceil: 1600 } };
+const FLUID = { player: { floor: 520, frac: .36, ceil: 900 }, ctrls: { floor: 640, frac: .4, ceil: 1000 }, tools: { floor: 480, frac: .3, ceil: 800 }, hist: { floor: 560, frac: .3, ceil: 900 } };
+// The board has no fixed ceiling: a square module can only be as large as the visible area (the workspace never scrolls, so a bigger board would hide squares and its own
+// grip). The grip glyph reaches 11px past the board corner and the area margin is 8px, so a board at its maximum gives up GRIP_EDGE px (just the overshoot) and the grip stays fully on screen.
+const GRIP_EDGE = 3;
 const fluidMax = (a, k) => Math.min(a.w, k.ceil, Math.max(k.floor, k.frac * a.w));
 function limits(t) {
   const a = area(), id = t.id;
   if (id === 'board') {
     const b = t.el.querySelector('.board'), extra = Math.max(0, t.el.offsetHeight - (b ? b.offsetHeight : 0));
-    const maxW = Math.max(120, Math.min(a.w, a.h - extra, FLUID.board.ceil));   // on a tiny window the board may drop below its usual minimum rather than leave the screen
+    const maxW = Math.max(120, Math.min(a.w, a.h - extra) - GRIP_EDGE);   // on a tiny window the board may drop below its usual minimum rather than leave the screen
     return { minW: Math.min(240, maxW), maxW, extra };
   }
   if (id === 'hist') return { minW: 200, maxW: fluidMax(a, FLUID.hist), minH: 160, maxH: a.h };
@@ -115,7 +118,7 @@ function setSize(t, w, h) {
   if (t.def.axes === 'xy' && h != null) el.style.height = clamp(h, L.minH, L.maxH) + 'px';
 }
 function setPos(t, x, y) {
-  const r = t.el.getBoundingClientRect(), [px, py] = fit(x, y, r.width, r.height);
+  const r = t.el.getBoundingClientRect(), [px, py] = fit(x, y, r.width, r.height, t.id === 'board' && inWs(t) ? GRIP_EDGE : 0);
   t.el.style.left = px + 'px'; t.el.style.top = py + 'px';
 }
 function geomOf(t) {   // what is on screen right now, in storable form (+ the area it was measured in, so another viewport can map it proportionally)
@@ -156,8 +159,9 @@ function defaults(o) {
     // A panel is sized from the board: seven rack tiles about one board cell wide (+ padding). Small boards keep the 300px floor of the original layout.
     const pMax = limits(T.p0).maxW, pCap = Math.min(pMax, Math.max(300, Math.round(0.58 * s + 24)));
     const colW = clamp((a.w - s) / 2 - M, 168, pCap), pw = clamp(colW, 160, pCap);
-    if ((a.w - s) / 2 - M > pCap + 2 * M + 80) {
-      // Wide profile (shape decides, not a resolution): free space beside the board exceeds what two panels need, so the row becomes Board | Controls | Players
+    if (a.w - s > Math.min(Math.round(0.32 * s), 360) + pCap + 4 * M + 80) {
+      // Wide profile (shape decides, not a resolution): the free width beside the board holds a controls column plus a panel column, so the row becomes Board | Controls | Players.
+      // (It used to ask for two whole panel columns, one each side; with the board now exactly the board, with no frame around it, that test flipped on ultrawide screens that had always been wide.)
       const cw = clamp(Math.round(0.32 * s), 168, Math.min(limits(T.ctrls).maxW, 360)), hp = measure(T[left], pw), hq = measure(T[right], pw), hc = measure(T.ctrls, cw), ht = measure(T.tools, cw);
       const total = s + M + cw + M + pw, x0 = Math.max(a.x0, a.x0 + (a.w - total) / 2), bh = s + extra, stackH = hp + M + hq;
       const yP = clamp(a.y0 + (bh - stackH) / 2, a.y0, Math.max(a.y0, a.y1 - stackH));
@@ -263,7 +267,7 @@ function bindHandle(t, h) {
 }
 function resizeBy(t, dw, dh) {
   const r = t.el.getBoundingClientRect(), a = area(), ax = t.def.axes;
-  if (ax === 's') setSize(t, Math.min(r.width + dw, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0);
+  if (ax === 's') setSize(t, r.width + dw, 0);   // the board's true maximum is reachable from any position: it slides back inside as it grows
   else if (t.def.popup) setSize(t, r.width + dw);
   else setSize(t, Math.min(r.width + dw, a.x1 - r.left), ax === 'xy' ? Math.min(r.height + dh, a.y1 - r.top) : null);
   setPos(t, r.left, r.top); commit(t, true);
@@ -272,7 +276,7 @@ function bindGrip(t, g) {
   let rs = null, raf = 0;
   const apply = e => {
     const a = area(), r = t.el.getBoundingClientRect(), dx = e.clientX - rs.x, dy = e.clientY - rs.y, ax = t.def.axes;
-    if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, Math.min(rs.w + d, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0); }
+    if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, rs.w + d, 0); setPos(t, r.left, r.top); }   // grows to the real maximum from any position, sliding back inside the area (like popups)
     else if (t.def.popup) { setSize(t, rs.w + dx); setPos(t, r.left, r.top); }   // a popup against the right edge grows by sliding left instead of refusing
     else { setSize(t, Math.min(rs.w + dx, a.x1 - r.left), ax === 'xy' ? Math.min(rs.h + dy, a.y1 - r.top) : null); if (ax === 'x') setPos(t, r.left, r.top); }   // height follows width (racks grow): slide it back inside
   };
@@ -299,13 +303,20 @@ function addChrome(t) {
   if (t.chrome) return; t.chrome = [];
   if (!t.isPopup) {   // modules without a title bar get a slim move strip (word log and dialogue reuse their title)
     const h = document.createElement('button'); h.type = 'button'; h.className = 'flMove';
-    h.setAttribute('aria-label', `تحريك ${t.def.label}: الأسهم للتحريك، + و − للحجم، نقر مزدوج لإعادة الضبط`); h.title = 'اسحب لتحريك ' + t.def.label;
     t.el.prepend(h); bindHandle(t, h); t.chrome.push(h);
   }
-  const g = document.createElement('button'); g.type = 'button'; g.className = 'flGrip';
-  g.setAttribute('aria-label', `تغيير حجم ${t.def.label}: الأسهم`); g.title = 'اسحب لتغيير الحجم'; g.innerHTML = GRIP;
+  const g = document.createElement('button'); g.type = 'button'; g.className = 'flGrip'; g.innerHTML = GRIP;
   t.el.append(g); bindGrip(t, g); t.chrome.push(g);
+  relabel(t);
 }
+// The handles' accessible names mention the module (for the players: the player's current name), so they are rewritten when a name changes.
+function relabel(t) {
+  for (const n of t.chrome || []) {
+    if (n.classList.contains('flMove')) { n.setAttribute('aria-label', `تحريك ${t.def.label}: الأسهم للتحريك، + و − للحجم، نقر مزدوج لإعادة الضبط`); n.title = 'اسحب لتحريك ' + t.def.label; }
+    else { n.setAttribute('aria-label', `تغيير حجم ${t.def.label}: الأسهم`); n.title = 'اسحب لتغيير الحجم'; }
+  }
+}
+onNamesChange(() => { for (const id of ['p0', 'p1']) if (things[id]) relabel(things[id]); });
 const removeChrome = t => { (t.chrome || []).forEach(n => n.remove()); t.chrome = null; };
 const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z-index', '--float-board-size']) t.el.style.removeProperty(p); };
 
