@@ -136,6 +136,20 @@ const store = (p, k) => p.evaluate(k => localStorage.getItem(k), k);
   ok(/بقي 6 قطع في الكيس/.test(await m.page.$eval('#toast', e => e.textContent)), 'the move that takes the bag below 8 says so in its toast');
   await closeGame(m.page);
 }
+// ---------- Floating Workspace: the board has no box behind it ----------
+{
+  const ON = { 'scrabble.layout': '{}', 'scrabble.floatWorkspace.v2': JSON.stringify({ v: 2, enabled: true, portrait: {}, landscape: {} }) };
+  for (const [n, vp] of [['desktop', DESK], ['phone', PHONE]]) {
+    const { page } = await openGame(b, vp, { storage: ON }); await sleep(300);
+    const f = await page.evaluate(() => { const w = document.querySelector('.boardWrap'), c = getComputedStyle(w), k = getComputedStyle(document.querySelector('.ctrls')); const bd = document.querySelector('#board').getBoundingClientRect(), r = w.getBoundingClientRect();
+      return { fl: document.documentElement.dataset.floating, bg: c.backgroundColor, img: c.backgroundImage, sh: c.boxShadow, bf: c.backdropFilter, ctrlsBg: k.backgroundColor, handle: !!w.querySelector('.flMove'), grip: !!w.querySelector('.flGrip'), pad: [bd.top - r.top, r.bottom - bd.bottom] }; });
+    ok(f.fl === 'true', n + ': workspace is on');
+    ok(/rgba\(0, 0, 0, 0\)|transparent/.test(f.bg) && f.img === 'none' && f.sh === 'none' && (f.bf === 'none' || f.bf === ''), `${n}: no panel, shadow or blur behind the board (${f.bg} / ${f.sh})`);
+    ok(!/rgba\(0, 0, 0, 0\)/.test(f.ctrlsBg), n + ': the control bar keeps its panel');
+    ok(f.handle && f.grip && f.pad[0] >= 20, n + ': drag strip and resize corner are still there');
+    await closeGame(page);
+  }
+}
 // ---------- turn dot ----------
 {
   const { page } = await openGame(b, DESK);
