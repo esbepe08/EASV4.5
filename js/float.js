@@ -91,13 +91,13 @@ export function raise(t) {
 
 // Resize ranges come from the live CSS viewport (never from a device list): a usability floor that keeps small screens exactly as they were, a share of the
 // available width that lets large and ultrawide screens grow, and a generous ceiling so nothing becomes absurd. devicePixelRatio plays no part.
-const FLUID = { player: { floor: 520, frac: .36, ceil: 900 }, ctrls: { floor: 640, frac: .4, ceil: 1000 }, tools: { floor: 480, frac: .3, ceil: 800 }, hist: { floor: 560, frac: .3, ceil: 900 }, board: { ceil: 1600 } };
+const FLUID = { player: { floor: 520, frac: .36, ceil: 900 }, ctrls: { floor: 640, frac: .4, ceil: 1000 }, tools: { floor: 480, frac: .3, ceil: 800 }, hist: { floor: 560, frac: .3, ceil: 900 } };   // the board has no ceiling of its own: the visible area is its only limit (see limits)
 const fluidMax = (a, k) => Math.min(a.w, k.ceil, Math.max(k.floor, k.frac * a.w));
 function limits(t) {
   const a = area(), id = t.id;
   if (id === 'board') {
     const b = t.el.querySelector('.board'), extra = Math.max(0, t.el.offsetHeight - (b ? b.offsetHeight : 0));
-    const maxW = Math.max(120, Math.min(a.w, a.h - extra, FLUID.board.ceil));   // on a tiny window the board may drop below its usual minimum rather than leave the screen
+    const maxW = Math.max(120, Math.min(a.w, a.h - extra));   // the whole board must stay visible: the screen is the only limit, wherever the board currently sits (a resize slides it back inside, see bindGrip). On a tiny window the board may drop below its usual minimum rather than leave the screen
     return { minW: Math.min(240, maxW), maxW, extra };
   }
   if (id === 'hist') return { minW: 200, maxW: fluidMax(a, FLUID.hist), minH: 160, maxH: a.h };
@@ -117,6 +117,10 @@ function setSize(t, w, h) {
 function setPos(t, x, y) {
   const r = t.el.getBoundingClientRect(), [px, py] = fit(x, y, r.width, r.height);
   t.el.style.left = px + 'px'; t.el.style.top = py + 'px';
+  if (t.def.axes === 's') {   // a board flush with the screen edge would push its resize grip (which hangs 14px outside the corner) off-screen: pull it inside on that axis
+    t.el.classList.toggle('flEdgeX', innerWidth - (px + r.width) < 16);
+    t.el.classList.toggle('flEdgeY', innerHeight - (py + r.height) < 16);
+  }
 }
 function geomOf(t) {   // what is on screen right now, in storable form (+ the area it was measured in, so another viewport can map it proportionally)
   const r = t.el.getBoundingClientRect(), a = area(), g = { x: r.left, y: r.top };
@@ -264,7 +268,7 @@ function bindHandle(t, h) {
 }
 function resizeBy(t, dw, dh) {
   const r = t.el.getBoundingClientRect(), a = area(), ax = t.def.axes;
-  if (ax === 's') setSize(t, Math.min(r.width + dw, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0);
+  if (ax === 's') setSize(t, r.width + dw, 0);   // limited by the screen only; setPos below slides the board back inside
   else if (t.def.popup) setSize(t, r.width + dw);
   else setSize(t, Math.min(r.width + dw, a.x1 - r.left), ax === 'xy' ? Math.min(r.height + dh, a.y1 - r.top) : null);
   setPos(t, r.left, r.top); commit(t, true);
@@ -273,7 +277,7 @@ function bindGrip(t, g) {
   let rs = null, raf = 0;
   const apply = e => {
     const a = area(), r = t.el.getBoundingClientRect(), dx = e.clientX - rs.x, dy = e.clientY - rs.y, ax = t.def.axes;
-    if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, Math.min(rs.w + d, a.x1 - r.left, a.y1 - r.top - limits(t).extra), 0); }
+    if (ax === 's') { const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy; setSize(t, rs.w + d, 0); setPos(t, r.left, r.top); }   // grows up to the screen limit and slides up/left when it would leave the screen (same as popups)
     else if (t.def.popup) { setSize(t, rs.w + dx); setPos(t, r.left, r.top); }   // a popup against the right edge grows by sliding left instead of refusing
     else { setSize(t, Math.min(rs.w + dx, a.x1 - r.left), ax === 'xy' ? Math.min(rs.h + dy, a.y1 - r.top) : null); if (ax === 'x') setPos(t, r.left, r.top); }   // height follows width (racks grow): slide it back inside
   };
@@ -315,7 +319,7 @@ function relabel(t) {
 }
 onNamesChange(() => { for (const id of ['p0', 'p1']) if (things[id]) relabel(things[id]); });
 const removeChrome = t => { (t.chrome || []).forEach(n => n.remove()); t.chrome = null; };
-const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z-index', '--float-board-size']) t.el.style.removeProperty(p); };
+const clearInline = t => { for (const p of ['left', 'top', 'width', 'height', 'z-index', '--float-board-size']) t.el.style.removeProperty(p); t.el.classList.remove('flEdgeX', 'flEdgeY'); };
 
 // ---------- popups: settings, gameplay dialogue, word-log drawer ----------
 const isFixed = t => getComputedStyle(t.el).position === 'fixed' && !t.el.classList.contains('dlgModal');
